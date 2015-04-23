@@ -1,0 +1,75 @@
+C语言复习-链表1
+
+---
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+struct node {
+	int value;
+	struct node *next;
+};
+
+int main(void)
+{
+	int read;
+	struct node *head = NULL, *cursor = NULL;
+
+	do
+	{
+		printf("input a integer: ");
+		scanf("%d", &read);
+
+		struct node *tmp = NULL;
+		tmp = (struct node *) malloc(sizeof(struct node));
+
+		if (tmp == NULL)
+		{
+			printf("$: malloc fail!\r\n");
+			break;
+		}
+
+		memset(tmp, 0, sizeof(tmp));
+		tmp->value = read;
+		tmp->next = NULL;
+
+		if (head == NULL)
+			head = tmp;
+		else
+		{
+			cursor = head;
+			while(cursor->next)
+				cursor = cursor->next;
+			cursor->next = tmp;
+		}
+
+	} while(read != -1);
+
+	cursor = head;
+	printf("\r\n$: begin release\r\n");
+
+	if (cursor)
+	{
+		while(cursor)
+		{
+			printf("$: realse Node: %d\r\n", cursor->value);
+
+			head = cursor->next;
+			free(cursor);
+			cursor = head;
+		}
+	}
+	else
+		printf("$: no nodes release!\r\n");
+
+	head = cursor = NULL;
+	printf("$: end release\r\n");
+
+	return 0;
+}
+```
+
+
+
+
