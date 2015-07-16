@@ -81,9 +81,9 @@
 　　2）在线安装，在线安装之前，需要安装”Packages Control“这个包管理插件，安装方法是：
 
 　　　　选择”查看“—>”显示控制台“，然后在下面弹出的框中输入：
-	```python
-	import urllib2,os;pf='Package Control.sublime-package';ipp=sublime.installed_packages_path();os.makedirs(ipp) if not os.path.exists(ipp) else None;open(os.path.join(ipp,pf),'wb').write(urllib2.urlopen('http://sublime.wbond.net/'+pf.replace(' ','%20')).read())
-	```
+```python
+import urllib2,os;pf='Package Control.sublime-package';ipp=sublime.installed_packages_path();os.makedirs(ipp) if not os.path.exists(ipp) else None;open(os.path.join(ipp,pf),'wb').write(urllib2.urlopen('http://sublime.wbond.net/'+pf.replace(' ','%20')).read())
+```
 　　　　然后回车确认，安装完毕之后重启sublime，如果发现在Perferences中看到package control这一项，则安装成功。
 
 　　然后就可以通过”Ctrl+Shift+P“打开命令面板，输入”install“命令，就可以看到安装包列表了。
@@ -121,14 +121,14 @@ Ctrl+Shift+T。
 　　7.SublimeCodeIntel插件
 
 　　智能提示插件，这个插件的智能提示功能非常强大，可以自定义提示的内容库，我的Python智能提示设置（配置文件路径为packages\SublimeCodeIntel-master\.codeintel\config）为：
-	```javascript
-	{
-	    "Python": {
-	        "python":'D:/Program Files/Python26/python.exe',
-	        "pythonExtraPaths": ['D:/Program Files/Python26','D:/Program Files/Python26/DLLs','D:/Program Files/Python26/Lib','D:/Program Files/Python26/Lib/plat-win','D:/Program Files/Python26/Lib/lib-tk','D:/Program Files/Python26/Lib/site-packages']
-	    }
-	}
-	```
+```javascript
+{
+    "Python": {
+        "python":'D:/Program Files/Python26/python.exe',
+        "pythonExtraPaths": ['D:/Program Files/Python26','D:/Program Files/Python26/DLLs','D:/Program Files/Python26/Lib','D:/Program Files/Python26/Lib/plat-win','D:/Program Files/Python26/Lib/lib-tk','D:/Program Files/Python26/Lib/site-packages']
+    }
+}
+```
 　　其中“pythonExtraPaths”就是需要智能提示所需要用到的内容库。
 
 　　8.emmet
