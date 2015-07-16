@@ -66,7 +66,7 @@ Sublime Text 2中Tools –> Build System –> New Build System…
 
 ###四.编译一个c代码示例
 
-搭建好C/C++编译环境后，Sublime Text 2中编译运行C/C++代码了。
+搭建好C/C++编译环境后，Sublime Text 2中编译运行C/C++代码了.
 ctrl+B构建，ctrl+shift+B运行。
 
 ```c
