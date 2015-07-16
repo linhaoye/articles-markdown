@@ -121,6 +121,7 @@ Ctrl+Shift+T。
 　　7.SublimeCodeIntel插件
 
 　　智能提示插件，这个插件的智能提示功能非常强大，可以自定义提示的内容库，我的Python智能提示设置（配置文件路径为packages\SublimeCodeIntel-master\.codeintel\config）为：
+
 ```javascript
 {
     "Python": {
@@ -129,11 +130,12 @@ Ctrl+Shift+T。
     }
 }
 ```
+
 　　其中“pythonExtraPaths”就是需要智能提示所需要用到的内容库。
 
 　　8.emmet
 
-	前段神器, 减少大量的工作量, 使用方法可以参考Emmet：HTML/CSS代码快速编写神器或者官方文档
+	前段神器, 减少大量的工作量, 使用方法可以参考Emmet：HTML/CSS代码快速编写神器或者官方文档。
 
 　　9.AndyJS2插件
 
