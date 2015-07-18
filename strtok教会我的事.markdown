@@ -5,6 +5,9 @@ s为要分解的字符串，delim为分隔符字符串。首次调用时，s必�
 看下面的一段程序:
 
 ```c
+
+#include <string.h>
+
 main()
 {
 	char *s="Golden Global View";
@@ -29,7 +32,9 @@ main()
 可以看下面的程序:
 
 ```c
-#include
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
  
 int main()
 {
@@ -37,4 +42,100 @@ int main()
 	s="abcdef";
 	*(s+1)='g';
 }
+```
+运行时会出现段错误。
+下面的程序：
+
+```c
+#include <stdio.h>
+#Include <stdlib.h>
+#include <string.h>
+ 
+int main()
+{
+       char *s=(char *)malloc(sizeof(char)*10);
+       strcpy(s,"abcdef");
+       *(s+1)='g';
+}
+```
+
+则会正确运行。
+出现这些不同的结果，究其原因，是“非常量指针指向了常量字符串”。”abcdef”本身是一个常量字符串，系统把它放在了只读权限的内存空间，用可读写的指针指向这块区域本身就是错误的（逻辑上），而对只读内存区域进行写操作则造成了实际的错误[2]。char s[]=”abc”则不然，首先声明了一个字符数组，然后将数组的大小定义成刚好能存下”abc”字符串，并且将”abc”存入该数组，这时数组存放在数据区并且已经在数据区分配了相应的空间。其实如果想改写指针指向的空间，就要确保指针指向可写的空间，想强制改写只读区域的内容是不鼓励的而且是另一个问题，再此不讨论。
+
+还有一个规则就是，非常量指针可以隐式转换成常量指针，而反之则需要显示转换。如：
+char a[1 strtok函数分解字符串为一组标记串，原型为：extern char *strtok(char *s, char *delim); s为要分解的字符串，delim为分隔符字符串。首次调用时，s必须指向要分解的字符串，随后调用要把s设成NULL。strtok在s中查找包含在delim中的字符并用NULL(‘\0’)来替换，直到找遍整个字符串。返回指向目前找到的最后一个标记串，当没有标记串时则返回空字符NULL。[1]
+
+看下面的一段程序：
+
+```c
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+ 
+int main()
+{
+	char *s="Golden Global View";
+	char *d=" ";
+	char *p;
+
+	p=strtok(s,d);
+	while(p)
+	{
+	      printf("%s\n",p);
+	      p=strtok(NULL,d);
+	}
+
+	return 1;
+}
+```
+编译没有问题，但运行时会出现Segmentation fault的错误。
+
+有些人就会百思不得其解，认为是strtok的问题，其实不然。如果将s的定义由char *s改成char s[]或char s[20]，则运行时就不会出现段错误而是想要的结果。可见问题不是strtok而是字符串常量的问题。看strtok的原型，s不是const的，说明在strtok里会修改s的值，而如果定义char *s="Golden Global View"，则s指向只读区域不能修改。
+
+可以看下面的程序：
+
+```c
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+ 
+int main()
+{
+       char *s=(char *)malloc(sizeof(char)*10);
+       s="abcdef";
+       *(s+1)='g';
+}
+```
+
+运行时会出现段错误。
+下面的程序：
+
+```c
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+ 
+int main()
+{
+	char *s=(char *)malloc(sizeof(char)*10);
+	strcpy(s,"abcdef");
+	*(s+1)='g';
+}
+```
+
+则会正确运行。
+
+出现这些不同的结果，究其原因，是“非常量指针指向了常量字符串”。”abcdef”本身是一个常量字符串，系统把它放在了只读权限的内存空间，用可读写的指针指向这块区域本身就是错误的（逻辑上），而对只读内存区域进行写操作则造成了实际的错误[2]。char s[]=”abc”则不然，首先声明了一个字符数组，然后将数组的大小定义成刚好能存下”abc”字符串，并且将”abc”存入该数组，这时数组存放在数据区并且已经在数据区分配了相应的空间。其实如果想改写指针指向的空间，就要确保指针指向可写的空间，想强制改写只读区域的内容是不鼓励的而且是另一个问题，再此不讨论。
+
+还有一个规则就是，非常量指针可以隐式转换成常量指针，而反之则需要显示转换。如：
+
+```c
+char a[10];
+const char *p=a; //这是没有问题的。反过来：
+const char *p=”abc”;
+char *a=p; //这是不允许的，需要进行强制转换：char *a=(char *)p[3]。
+0];
+const char *p=a; //这是没有问题的。反过来：
+const char *p=”abc”;
+char *a=p; //这是不允许的，需要进行强制转换：char *a=(char *)p[3]。
 ```
