@@ -134,7 +134,7 @@ Ctrl+Shift+T。
 　　其中“pythonExtraPaths”就是需要智能提示所需要用到的内容库。
 
 　　8.emmet
-
+  
 	前段神器, 减少大量的工作量, 使用方法可以参考Emmet：HTML/CSS代码快速编写神器或者官方文档。
 
 　　9.AndyJS2插件
@@ -147,7 +147,7 @@ Ctrl+Shift+T。
 
 　　11.Ctags插件
 
-　　该插件可以实现快速定位到函数定义的地方。
+　　该插件可以实现快速定位到函数定义的地方
 
 	12.alignment
 
