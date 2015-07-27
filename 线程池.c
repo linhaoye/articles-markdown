@@ -28,6 +28,10 @@ void *Pool_thread_routine(void *arg);
 
 CThread_pool *Pool_init(int max_thread_num) {
 	CThread_pool *pool = (CThread_pool*)malloc(sizeof (CThread_pool));
+	
+	if (pool == NULL ) {
+		return NULL;
+	}
 
 	pthread_mutex_init(&(pool->queue_lock), NULL);
 	pthread_cond_init(&(pool->queue_ready), NULL);
@@ -43,7 +47,8 @@ CThread_pool *Pool_init(int max_thread_num) {
 	for (i = 0; i < max_thread_num; i++) {
 		pthread_create(&(pool->thread_id[i]), NULL, Pool_thread_routine, pool);
 	}
-
+	
+	return pool;
 }
 
 int Pool_add_worker(CThread_pool *pool, void *(*process)(void *arg), void *arg) {
@@ -86,6 +91,7 @@ int Pool_destroy(CThread_pool *pool) {
 	int i;
 	for (i = 0; i < pool->max_thread_num; i++) {
 		pthread_join(pool->thread_id[i], NULL);
+		printf("release the thread worker 0x%x\n", pool->thread_id[i]);
 	}
 	free(pool->thread_id);
 
@@ -134,6 +140,8 @@ void *Pool_thread_routine(void *arg) {
 		CThread_workder *worker = pool->queue_head;
 		pool->queue_head = worker->next;
 		pthread_mutex_unlock(&(pool->queue_lock));
+		
+		worker->process(worker->arg); // run process
 		free(worker);
 		worker = NULL;
 	}
@@ -150,15 +158,17 @@ main(void)
 {
 	CThread_pool *pool = Pool_init(3);
 
-	// int workingnum[10];
-	// int i;
+	int workingnum[10];
+	int i;
 
-	// for (i = 0; i < 10; i++) {
-	// 	workingnum[i] = i;
-	// 	Pool_add_worker(pool, my_process, &workingnum[i]);
-	// }
+	for (i = 0; i < 10; i++) {
+		workingnum[i] = i * 2;
+		Pool_add_worker(pool, my_process, &workingnum[i]);
+	}
 
 	sleep(5);
 
+	printf("\nbegin to release sources\n");
 	Pool_destroy(pool);
+	printf("\nend");
 }
