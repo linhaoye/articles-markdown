@@ -24,7 +24,7 @@ typedef struct {
 CThread_pool *Pool_init(int max_thread_num);
 int Pool_add_worker (CThread_pool *pool, void *(*process)(void *arg), void *arg );
 int Pool_destroy(CThread_pool *pool);
-void *Pool_thread_routine(void *arg);
+static void *Pool_thread_routine(void *arg);
 
 CThread_pool *Pool_init(int max_thread_num) {
 	CThread_pool *pool = (CThread_pool*)malloc(sizeof (CThread_pool));
@@ -111,7 +111,7 @@ int Pool_destroy(CThread_pool *pool) {
 	return 0;
 }
 
-void *Pool_thread_routine(void *arg) {
+static void *Pool_thread_routine(void *arg) {
 	printf("starting thread 0x%x\n", pthread_self());
 
 	CThread_pool *pool = (CThread_pool *)arg;
