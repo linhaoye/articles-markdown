@@ -156,7 +156,8 @@ void *my_process(void *arg) {
 
 main(void)
 {
-	CThread_pool *pool = Pool_init(3);
+	CThread_pool *rpool = Pool_init(3);
+	CThread_pool *wpool = Pool_init(3);
 
 	int workingnum[10];
 	int i;
