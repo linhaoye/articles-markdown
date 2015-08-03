@@ -6,19 +6,19 @@
 #include <assert.h>
 
 typedef struct worker {
-	void *(*process) (void *arg);
-	void *arg;
+	void *(*process) (void *arg);	//线程回调函数
+	void *arg;						//回调函数参数
 	struct worker *next;
 } CThread_workder;
 
 typedef struct {
-	pthread_mutex_t queue_lock;
-	pthread_cond_t queue_ready;
-	CThread_workder *queue_head;
-	int shutdown;
-	pthread_t *thread_id;
-	int max_thread_num;
-	int cur_queue_size;
+	pthread_mutex_t queue_lock;		//互斥信号量
+	pthread_cond_t queue_ready;		//队列是否准备好的务件变量
+	CThread_workder *queue_head;	//指向worker的头指针
+	int shutdown;					//线程池是否关闭
+	pthread_t *thread_id;			//线程池中所有线程的pthread_t
+	int max_thread_num;				//线程池中开启的个数
+	int cur_queue_size;				//队列当前的job个数
 } CThread_pool;
 
 CThread_pool *Pool_init(int max_thread_num);

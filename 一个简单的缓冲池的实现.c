@@ -157,6 +157,31 @@ int Buffer_pool_increase(CBuffer_pool *cbp, int increase) {
 	return succ;
 }
 
+int Buffer_pool_write(CBuffer_pool *cbp, Buffer *w) {
+	int succ = 0;
+	uint32_t o, n;
+
+	if (!Buffer_pool_empty(cbp) && cbp->input->status != POOL_BUFFER_STATUS_READING && w->size >0) {
+		o = (cbp->input->size / cbp->slice_size) + (cbp->input->size / slice_size > 0 ? 1: 0);
+		n = (w->size / cbp->slice_size) + (w->size % slice_size > 0 ?1: 0);
+
+		if ( o != n) {
+			free(cbp->input->start);
+			cbp->start = malloc(void, n * cbp->slice_size);
+		}
+
+		cbp->size = w->size;
+		w->start = cbp->input->start;
+		w->id = cbp->input->id;
+
+		cbp->input->status = POOL_BUFFER_TYPE_WRITE;
+
+		succ = 1;
+	}
+
+	return succ;
+}
+
 int Buffer_pool_empty(CBuffer_pool *cbp) {
 	int empty = 1;
 
