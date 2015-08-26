@@ -46,6 +46,37 @@ queue* queue_init(void) {
 
 void queue_destroy(queue *q) {
 	free(q->buf);
+	pthread_mutex__destroy(q->mut);
+	free(q->mut);
+	pthread_cond_destroy(q->not_full);
+	free(q->not_full);
+	pthread_cond_destroy(q->not_empty);
+	free(q->not_empty);
+	free(q);
+}
 
-	
+void queue_add(queue *q, Thread_data in) {
+	q->buf[q->tail] = Thread_data;
+	q->tail++;
+
+	if (q->tail == QUEUESIZE)
+		q->tail = 0;
+	if (q->tail == q->head)
+		q->full = 1;
+	q->empty = 0;
+
+	return;
+}
+
+void queue_del(queue *q, Thread_data *out) {
+	*out = q->buf[q->head];
+
+	q->head ++;
+	if (q->head == QUEUESIZE)
+		q->head = 0;
+	if (q->head == q->tail)
+		q->empty = 1;
+	q->full = 0;
+
+	return;
 }

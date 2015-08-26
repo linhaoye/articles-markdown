@@ -10,13 +10,19 @@
 #include <fcntl.h>
 #include "tlpi_hdr.h"
 
+#define STR_SIZE	100
+
+struct vec {
+	char buf[128];
+	size_t len;	
+};
+
 int main(int argc, char *argv[])
 {
 	int fd;
 	struct iovec iov[3];
-	struct stat myStruct;
+	struct vec myVec;
 	int x;
-#define STR_SIZE	100
 	char str[STR_SIZE];
 	ssize_t numRead, totRequired;
 
@@ -28,28 +34,36 @@ int main(int argc, char *argv[])
 		errExit("open");
 
 	totRequired = 0;
-	iov[0].iov_base = &myStruct;
-	iov[0].iov_len = sizeof(struct stat);
+	iov[0].iov_base = &myVec;
+	iov[0].iov_len = sizeof(struct vec);
 
-	printf("stat size: %ld\n", iov[0].iov_len);
 
 	totRequired += iov[0].iov_len;
 	
 	iov[1].iov_base = &x;
 	iov[1].iov_len = sizeof(x);
-	totRequired += iov[2].iov_len;
+	totRequired += iov[1].iov_len;
 	
 	iov[2].iov_base = str;
 	iov[2].iov_len = STR_SIZE;
 	totRequired += iov[2].iov_len;
 
-	numRead = readv(fd, iov, 3);
-	if (numRead == 1)
+	while ( (numRead = readv(fd, iov, 3)) != 0)
+	{
+		memcpy(&myVec, iov[0].iov_base, iov[0].iov_len);
+		memcpy(&x, iov[1].iov_base, iov[1].iov_len);
+		memcpy(str, iov[2].iov_base, iov[2].iov_len);
+
+		printf ("num read: %d %d %s %s\n",numRead, x, myVec.buf, str);
+	}
+	if (numRead == -1)
 		errExit("readv");
 
 	if (numRead < totRequired)
 		printf ("Read fewer bytes than requested\n");
 	printf ("total bytes requested: %ld; bytes read: %ld\n", (long)totRequired, (long)numRead);
+
+	close(fd);
 
 	exit(EXIT_SUCCESS);
 }
