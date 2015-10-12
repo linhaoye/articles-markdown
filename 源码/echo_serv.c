@@ -114,7 +114,7 @@ void send_data(int fd, int events, void *arg)
 }
 
 int epfd;	//epoll例程
-event event_list[MAX_EVENTS]; // is used by listen fd
+event event_list[MAX_EVENTS]; //待监听的事件列表
 
 void accep_connent(int fd, int events, void *arg)
 {
@@ -159,6 +159,7 @@ void listen_socket(short port)
 
 	printf("[%s]:server listen on fd = %d\n", __func__, fd);
 
+	//在event_list列表尾添加server的fd监听事件
 	event_set(&event_list[MAX_EVENTS], fd, accep_connent, &event_list[MAX_EVENTS]);
 
 	//add listen socket
@@ -241,16 +242,16 @@ int main(int argc, char **argv)
 			if ( (events[i].events & EPOLLIN) && (ev->events & EPOLLIN) ) {
 				ev->event_handler(ev->fd, events[i].events, ev->arg);
 			}
-
+			//write事件
 			if ( (events[i].events & EPOLLOUT) && (ev->events & EPOLLOUT) ) {
 				ev->event_handler(ev->fd, events[i].events, ev->arg);
 			}
 		}
 	}
 
-	//free resource
-
 	close(epfd);
+	//关闭server的socket
+	close(event_list[MAX_EVENTS].fd);
 
 	return 0;
 }
