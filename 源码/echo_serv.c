@@ -3,7 +3,8 @@
 #include <netinet/in.h>
 #include "tlpi_hdr.h"
 
-#define MAX_EVENTS 	500
+#define MAX_EVENTS 		500
+#define DEFAULT_PORT	12345
 
 typedef struct _event {
 	int fd;
@@ -43,9 +44,9 @@ void event_add(int efd, int events, event *ev)
 	}
 
 	if (epoll_ctl(efd, op, ev->fd, &epv) < 0)
-		printf("event add failed[fd=%d], events[%d]\n", ev->fd, events);
+		printf("[%s]:event add failed[fd=%d], events[%d]\n", __func__, ev->fd, events);
 	else
-		printf("event add ok[fd=%d], op=%d, events[%0x]\n", ev->fd, op, events);
+		printf("[%s]:event add ok[fd=%d], op=%d, events[%0x]\n", __func__, ev->fd, op, events);
 }
 
 void event_del(int efd, event *ev)
@@ -78,11 +79,11 @@ void recv_data(int fd, int events, void *arg)
 	}
 	else if (len == 0) {
 		close(ev->fd);
-		printf("[fd=%d] pos[%d], close gracefully.\n", fd, ev - event_list);
+		printf("[%s]:[fd=%d], pos[%d], close gracefully.\n", __func__, fd, ev - event_list);
 	}
 	else {
 		close(ev->fd);
-		printf("recv[fd=%d] error[%d]:%s\n", fd, errno, strerror(errno));
+		printf("[%s]:recv[fd=%d] error[%d]:%s\n", __func__, fd, errno, strerror(errno));
 	}
 }
 
@@ -95,7 +96,7 @@ void send_data(int fd, int events, void *arg)
 	len = send(fd, ev->buff + ev->s_offset, ev->len - ev->s_offset, 0);
 
 	if (len > 0) {
-		printf("send [fd=%d], [%d<->%d]%s\n", fd, len, ev->len, ev->buff);
+		printf("[%s]:send [fd=%d], [%d<->%d]%s\n", __func__, fd, len, ev->len, ev->buff);
 		ev->s_offset += len;
 
 		if (ev->s_offset == ev->len) {
@@ -108,7 +109,7 @@ void send_data(int fd, int events, void *arg)
 	else {
 		close(ev->fd);
 		event_del(epfd, ev);
-		printf("send[fd=%d] error[%d]\n", fd, errno);
+		printf("[%s]:send[fd=%d] error[%d]\n", __func__, fd, errno);
 	}
 }
 
@@ -126,26 +127,29 @@ void accep_connent(int fd, int events, void *arg)
 		errExit("%s: accept, %d", __LINE__, errno);
 	}
 
-	do {
-		for (i =0; i < MAX_EVENTS; i++) {
-			if (event_list[i].status == 0)
-				break;
-		}
-
-		if (i == MAX_EVENTS) {
-			printf("%s:max connection limit[%d].", __LINE__, MAX_EVENTS);
+	for (i =0; i < MAX_EVENTS; i++) {
+		if (event_list[i].status == 0)
 			break;
-		}
-
-		//set nonblocking
-		int iret = 0;
-		if ((iret = fcntl(nfd, F_SETFL, O_NONBLOCK)) < 0) {
-			printf("%s: fcntl nonblocking failed:%d", __LINE__, iret);
-			break;
-		}
-		event_set(&event_list[i], nfd, recv_data, &event_list[i]);
-		event_add(epfd, EPOLLIN, &event_list[i].last_active, i);
 	}
+
+	if (i == MAX_EVENTS) {
+		printf("[%s]:max connection limit[%d].", __LINE__, MAX_EVENTS);
+		close(nfd);//达到最大连接数关闭 nfd
+		break;
+	}
+
+	//set nonblocking
+	int iret = 0;
+	if ((iret = fcntl(nfd, F_SETFL, O_NONBLOCK)) < 0) {
+		printf("[%s]: fcntl nonblocking failed:%d", __LINE__, iret);
+		break;
+	}
+
+	event_set(&event_list[i], nfd, recv_data, &event_list[i]);
+	event_add(epfd, EPOLLIN, &event_list[i]);
+
+	pirntf("[%s]:new conn[%s:%d][time:%d],pos[%d]\n", __func__, inet_ntoa(sin.sin_addr), 
+		ntohs(sin.sin_port), event_list[i].last_active, i);
 }
 
 void listen_socket(short port)
@@ -153,7 +157,7 @@ void listen_socket(short port)
 	int fd = socket(AF_INET, SOCK_STREAM, 0);
 	fcntl(fd, F_SETFL, O_NONBLOCK);
 
-	printf("server listen on fd = %d\n", fd);
+	printf("[%s]:server listen on fd = %d\n", __func__, fd);
 
 	event_set(&event_list[MAX_EVENTS], fd, accep_connent, &event_list[MAX_EVENTS]);
 
@@ -164,36 +168,36 @@ void listen_socket(short port)
 	sockaddr_in sin;
 	memset(&sin, 0, sizeof(sin));
 	sin.sin_family = AF_INET;
-	sin.sin_add.s_addr = INADDR_ANY;
+	sin.sin_addr.s_addr = INADDR_ANY;
 	sin.sin_port = htons(port);
 
 	if (bind(fd, (const sockaddr *) &sin, size(sin)) == -1) {
-		errExit("%s:bind, error[%d]\n", __LINE__, errno);
+		errExit("[%s]:bind, error[%d]\n", __LINE__, errno);
 	}
 
 	if (listen(fd, 5) == -1) {
-		errExit("%s:listen, error[%d]\n", __LINE__, errno);
+		errExit("[%s]:listen, error[%d]\n", __LINE__, errno);
 	}
 }
 
 int main(int argc, char **argv)
 {
-	unsigned short port = 12345;
+	unsigned short port = DEFAULT_PORT;
 
 	if (argc == 2) {
-		port = getLong(argv[1]);
+		port = getLong(argv[1], 0, "port-num");
 	}
 
 	//创建epoll例程
 	epfd = epoll_create(MAX_EVENTS);
 
 	if (epfd <= 0) {
-		errExit("create epoll failed.%d\n", epfd);
+		errExit("[%s]:create epoll failed.%d\n", __func__, epfd);
 	}
 
-	listen_socket(epfd, port);
+	listen_socket(port);
 
-	printf ("server running: port[%d]\n", port);
+	printf ("[%s]:server running: port[%d]\n", __func__, port);
 
 	struct epoll_event events[MAX_EVENTS];
 	int check_pos = 0;
@@ -216,7 +220,9 @@ int main(int argc, char **argv)
 			long duration = now - event_list[check_pos].last_active;
 			if (duration >= 60) {
 				close(event_list[check_pos].fd);
-				printf("[fd=%d] timeout[%d--%d].\n", event_list[check_pos].fd, event_list[check_pos].last_active, now);
+				printf("[fd=%d] timeout[%d--%d].\n", event_list[check_pos].fd, 
+					event_list[check_pos].last_active, now);
+
 				event_del(epfd, &event_list[check_pos]);
 			}
 		}
@@ -225,7 +231,7 @@ int main(int argc, char **argv)
 		int event_cnt = epoll_wait(epfd, events, MAX_EVENTS, 1000);
 
 		if (event_cnt < 0) {
-			errExit("%s:epoll_wait error\n", __LINE__);
+			errExit("[%s]:epoll_wait error\n", __LINE__);
 		}
 
 		for (i = 0; i < event_cnt; i++) {
@@ -243,6 +249,8 @@ int main(int argc, char **argv)
 	}
 
 	//free resource
+
+	close(epfd);
 
 	return 0;
 }
