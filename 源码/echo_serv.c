@@ -1,6 +1,8 @@
 #include <sys/socket.h>
 #include <sys/epoll.h>
+#include <arpa/inet.h>
 #include <netinet/in.h>
+#include <fcntl.h>
 #include "tlpi_hdr.h"
 
 #define MAX_EVENTS 		500
@@ -16,6 +18,93 @@ typedef struct _event {
 	int len, s_offset;
 	long last_active;
 } event;
+
+int epfd;	//epoll例程
+event event_list[MAX_EVENTS]; //待监听的事件列表
+
+void event_set(event *ev, int fd, void (*event_handler)(int, int, void*), void *arg);
+void event_add(int efd, int events, event *ev);
+void event_del(int efd, event *ev);
+
+void listen_socket(short port);
+void accep_connent(int fd, int events, void *arg);
+void send_data(int fd, int events, void *arg);
+void recv_data(int fd, int events, void *arg);
+
+int main(int argc, char **argv)
+{
+	unsigned short port = DEFAULT_PORT;
+
+	if (argc == 2) {
+		port = getLong(argv[1], 0, "port-num");
+	}
+
+	//创建epoll例程
+	epfd = epoll_create(MAX_EVENTS);
+
+	if (epfd <= 0) {
+		errExit("[%s]:create epoll failed.%d\n", __func__, epfd);
+	}
+
+	listen_socket(port);
+
+	printf ("[%s]:server running: port[%d]\n", __func__, port);
+
+	struct epoll_event events[MAX_EVENTS];
+	int check_pos = 0;
+
+	while(1)
+	{
+		int i;
+		long now = time(NULL);
+
+		/*
+		 *一个简单的超时检测
+		 */
+		for (i = 0; i < 100; i++, check_pos++) {
+			if (check_pos == MAX_EVENTS)
+				check_pos = 0;
+
+			if (event_list[check_pos].status != 1)
+				continue;
+
+			long duration = now - event_list[check_pos].last_active;
+			if (duration >= 60) {
+				close(event_list[check_pos].fd);
+				printf("[fd=%d] timeout[%d--%d].\n", event_list[check_pos].fd, 
+					event_list[check_pos].last_active, now);
+
+				event_del(epfd, &event_list[check_pos]);
+			}
+		}
+
+		//等待事件发生
+		int event_cnt = epoll_wait(epfd, events, MAX_EVENTS, 1000);
+
+		if (event_cnt < 0) {
+			errExit("[%s]:epoll_wait error\n", __LINE__);
+		}
+
+		for (i = 0; i < event_cnt; i++) {
+			event *ev = (struct _event*)events[i].data.ptr;
+
+			//read事件
+			if ( (events[i].events & EPOLLIN) && (ev->events & EPOLLIN) ) {
+				ev->event_handler(ev->fd, events[i].events, ev->arg);
+			}
+			//write事件
+			if ( (events[i].events & EPOLLOUT) && (ev->events & EPOLLOUT) ) {
+				ev->event_handler(ev->fd, events[i].events, ev->arg);
+			}
+		}
+	}
+
+	close(epfd);
+	//关闭server的socket
+	close(event_list[MAX_EVENTS].fd);
+
+	return 0;
+}
 
 void event_set(event *ev, int fd, void (*event_handler)(int, int, void*), void *arg)
 {
@@ -60,9 +149,10 @@ void event_del(int efd, event *ev)
 	epoll_ctl(efd, EPOLL_CTL_DEL, ev->fd, &epv);
 }
 
+
 void recv_data(int fd, int events, void *arg)
 {
-	struct event *ev = (struct event*) arg;
+	struct _event *ev = (struct _event*) arg;
 	int len;
 	len = recv(fd, ev->buff + ev->len, sizeof(ev->buff) - 1 - ev->len, 0);
 
@@ -89,7 +179,7 @@ void recv_data(int fd, int events, void *arg)
 
 void send_data(int fd, int events, void *arg)
 {
-	struct event *ev = (struct event*) arg;
+	struct _event *ev = (struct _event*) arg;
 	int len;
 
 	//send data
@@ -113,13 +203,11 @@ void send_data(int fd, int events, void *arg)
 	}
 }
 
-int epfd;	//epoll例程
-event event_list[MAX_EVENTS]; //待监听的事件列表
 
 void accep_connent(int fd, int events, void *arg)
 {
 	struct sockaddr_in sin;
-	socket_t len = sizeof(struct sockaddr_in);
+	socklen_t len = sizeof(struct sockaddr_in);
 	int nfd /*客户端请求过的fd*/, i;
 
 	//accept
@@ -135,20 +223,21 @@ void accep_connent(int fd, int events, void *arg)
 	if (i == MAX_EVENTS) {
 		printf("[%s]:max connection limit[%d].", __LINE__, MAX_EVENTS);
 		close(nfd);//达到最大连接数关闭 nfd
-		break;
+		goto output;
 	}
 
 	//set nonblocking
 	int iret = 0;
 	if ((iret = fcntl(nfd, F_SETFL, O_NONBLOCK)) < 0) {
 		printf("[%s]: fcntl nonblocking failed:%d", __LINE__, iret);
-		break;
+		goto output;
 	}
 
 	event_set(&event_list[i], nfd, recv_data, &event_list[i]);
 	event_add(epfd, EPOLLIN, &event_list[i]);
 
-	pirntf("[%s]:new conn[%s:%d][time:%d],pos[%d]\n", __func__, inet_ntoa(sin.sin_addr), 
+	output:
+	printf("[%s]:new conn[%s:%d][time:%d],pos[%d]\n", __func__, inet_ntoa(sin.sin_addr), 
 		ntohs(sin.sin_port), event_list[i].last_active, i);
 }
 
@@ -166,94 +255,19 @@ void listen_socket(short port)
 	event_add(epfd, EPOLLIN, &event_list[MAX_EVENTS]);
 
 	//bind & listen
-	sockaddr_in sin;
+	struct sockaddr_in sin;
 	memset(&sin, 0, sizeof(sin));
 	sin.sin_family = AF_INET;
 	sin.sin_addr.s_addr = INADDR_ANY;
 	sin.sin_port = htons(port);
 
-	if (bind(fd, (const sockaddr *) &sin, size(sin)) == -1) {
+	if (bind(fd, (struct sockaddr *) &sin, sizeof(sin)) == -1) {
 		errExit("[%s]:bind, error[%d]\n", __LINE__, errno);
 	}
 
 	if (listen(fd, 5) == -1) {
 		errExit("[%s]:listen, error[%d]\n", __LINE__, errno);
 	}
-}
-
-int main(int argc, char **argv)
-{
-	unsigned short port = DEFAULT_PORT;
-
-	if (argc == 2) {
-		port = getLong(argv[1], 0, "port-num");
-	}
-
-	//创建epoll例程
-	epfd = epoll_create(MAX_EVENTS);
-
-	if (epfd <= 0) {
-		errExit("[%s]:create epoll failed.%d\n", __func__, epfd);
-	}
-
-	listen_socket(port);
-
-	printf ("[%s]:server running: port[%d]\n", __func__, port);
-
-	struct epoll_event events[MAX_EVENTS];
-	int check_pos = 0;
-
-	while(1)
-	{
-		int i;
-		long now = time(NULL);
-
-		/*
-		 *一个简单的超时检测
-		 */
-		for (i = 0; i < 100; i++, check_pos++) {
-			if (check_pos == MAX_EVENTS)
-				check_pos = 0;
-
-			if (event_list[check_pos].status != 1)
-				continue
-
-			long duration = now - event_list[check_pos].last_active;
-			if (duration >= 60) {
-				close(event_list[check_pos].fd);
-				printf("[fd=%d] timeout[%d--%d].\n", event_list[check_pos].fd, 
-					event_list[check_pos].last_active, now);
-
-				event_del(epfd, &event_list[check_pos]);
-			}
-		}
-
-		//等待事件发生
-		int event_cnt = epoll_wait(epfd, events, MAX_EVENTS, 1000);
-
-		if (event_cnt < 0) {
-			errExit("[%s]:epoll_wait error\n", __LINE__);
-		}
-
-		for (i = 0; i < event_cnt; i++) {
-			event *ev = (struct _event*)events[i].data.ptr;
-
-			//read事件
-			if ( (events[i].events & EPOLLIN) && (ev->events & EPOLLIN) ) {
-				ev->event_handler(ev->fd, events[i].events, ev->arg);
-			}
-			//write事件
-			if ( (events[i].events & EPOLLOUT) && (ev->events & EPOLLOUT) ) {
-				ev->event_handler(ev->fd, events[i].events, ev->arg);
-			}
-		}
-	}
-
-	close(epfd);
-	//关闭server的socket
-	close(event_list[MAX_EVENTS].fd);
-
-	return 0;
 }
 
 // var url = 'http://blog.csdn.net/sparkliang/article/details/4770655';
