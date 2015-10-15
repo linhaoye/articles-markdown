@@ -20,7 +20,7 @@ typedef struct _event {
 } event;
 
 int epfd;	//epoll例程
-event event_list[MAX_EVENTS]; //待监听的事件列表
+event event_list[MAX_EVENTS + 1]; //fd事件列表, 最后一个是用于服务器的fd
 
 void event_set(event *ev, int fd, void (*event_handler)(int, int, void*), void *arg);
 void event_add(int efd, int events, event *ev);
@@ -43,7 +43,7 @@ int main(int argc, char **argv)
 	epfd = epoll_create(MAX_EVENTS);
 
 	if (epfd <= 0) {
-		errExit("[%s]:create epoll failed.%d\n", __func__, epfd);
+		errExit("[%s]:create epoll failed.epfd[%d].\n", __func__, epfd);
 	}
 
 	listen_socket(port);
@@ -59,7 +59,9 @@ int main(int argc, char **argv)
 		long now = time(NULL);
 
 		/*
-		 *一个简单的超时检测
+		 * 一个简单的超时检测
+		 * 最好是采用libevent的定时器设计, 最小堆(堆顶事件)确定最小超时时间
+		 *
 		 */
 		for (i = 0; i < 100; i++, check_pos++) {
 			if (check_pos == MAX_EVENTS)
@@ -77,6 +79,14 @@ int main(int argc, char **argv)
 				event_del(epfd, &event_list[check_pos]);
 			}
 		}
+
+		/*
+		 * 我们知道select和poll文件描述符集会在内核态和用户态相互拷贝.
+		 * epoll比select和poll省略了内存拷贝的原因:
+		 * 		int epoll_create(int size)时, 其操作早请一块内存, 存储
+		 *   	fd相关信息, epoll_wait()调用时, epoll_event *events参数
+		 *    	会使用mmap放进去.
+		 */
 
 		//等待事件发生
 		int event_cnt = epoll_wait(epfd, events, MAX_EVENTS, 1000);
@@ -233,6 +243,11 @@ void accep_connent(int fd, int events, void *arg)
 		goto output;
 	}
 
+	/*
+	 * 这里第一个和第四个参数基本一样的.所以会认为这里函数原型只需要3个参数即可.
+	 * 逻辑意义上而言, 参数1表示在哪个events上设置callback, 参数4是传递给callback的参数.
+	 *
+	 */
 	event_set(&event_list[i], nfd, recv_data, &event_list[i]);
 	event_add(epfd, EPOLLIN, &event_list[i]);
 
