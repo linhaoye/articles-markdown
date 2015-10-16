@@ -19,8 +19,8 @@ typedef struct _event {
 	long last_active;
 } event;
 
-int epfd;	//epoll例程
-event event_list[MAX_EVENTS + 1]; //fd事件列表, 最后一个是用于服务器的fd
+int epfd; 							//epoll例程
+event event_list[MAX_EVENTS + 1]; 	//fd事件列表, 最后一个是用于服务器的fd
 
 void event_set(event *ev, int fd, void (*event_handler)(int, int, void*), void *arg);
 void event_add(int efd, int events, event *ev);
