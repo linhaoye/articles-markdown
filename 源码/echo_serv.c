@@ -5,7 +5,7 @@
 #include <fcntl.h>
 #include "tlpi_hdr.h"
 
-#define MAX_EVENTS 		500
+#define MAX_EVENTS		500
 #define DEFAULT_PORT	12345
 
 typedef struct _event {
