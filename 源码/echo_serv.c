@@ -19,7 +19,7 @@ typedef struct _event {
 	long last_active;
 } event;
 
-int epfd; 							//epoll例程
+int epfd; 				//epoll例程
 event event_list[MAX_EVENTS + 1]; 	//fd事件列表, 最后一个是用于服务器的fd
 
 void event_set(event *ev, int fd, void (*event_handler)(int, int, void*), void *arg);
@@ -33,6 +33,8 @@ void recv_data(int fd, int events, void *arg);
 
 int main(int argc, char **argv)
 {
+	int i;
+	long now, duration;
 	unsigned short port = DEFAULT_PORT;
 
 	if (argc == 2) {
@@ -55,8 +57,7 @@ int main(int argc, char **argv)
 
 	while(1)
 	{
-		int i;
-		long now = time(NULL);
+		now = time(NULL);
 
 		/*
 		 * 一个简单的超时检测
@@ -70,11 +71,11 @@ int main(int argc, char **argv)
 			if (event_list[check_pos].status != 1)
 				continue;
 
-			long duration = now - event_list[check_pos].last_active;
+			duration = now - event_list[check_pos].last_active;
 			if (duration >= 60) {
 				close(event_list[check_pos].fd);
-				printf("[fd=%d] timeout[%d--%d].\n", event_list[check_pos].fd, 
-					event_list[check_pos].last_active, now);
+				printf("[%s]:[fd=%d,pos=%d] last[%d] now[%d] timeout[%d].\n", 
+					__func__, event_list[check_pos].fd, check_pos, event_list[check_pos].last_active, now, duration);
 
 				event_del(epfd, &event_list[check_pos]);
 			}
@@ -83,7 +84,7 @@ int main(int argc, char **argv)
 		/*
 		 * 我们知道select和poll文件描述符集会在内核态和用户态相互拷贝.
 		 * epoll比select和poll省略了内存拷贝的原因:
-		 * 		int epoll_create(int size)时, 其操作早请一块内存, 存储
+		 * 	int epoll_create(int size)时, 其操作早请一块内存, 存储
 		 *   	fd相关信息, epoll_wait()调用时, epoll_event *events参数
 		 *    	会使用mmap放进去.
 		 */
@@ -152,8 +153,8 @@ void event_del(int efd, event *ev)
 {
 	struct epoll_event epv = {0, {0}};
 
-	if (ev->status)
-		return;
+	if (ev->status != 1) return;
+
 	epv.data.ptr = ev;
 	ev->status = 0;
 	epoll_ctl(efd, EPOLL_CTL_DEL, ev->fd, &epv);
@@ -162,19 +163,30 @@ void event_del(int efd, event *ev)
 
 void recv_data(int fd, int events, void *arg)
 {
-	struct _event *ev = (struct _event*) arg;
 	int len;
+	char buff[128];
+	struct _event *ev = (struct _event*) arg;
 	len = recv(fd, ev->buff + ev->len, sizeof(ev->buff) - 1 - ev->len, 0);
 
+	memcpy(buff, ev->buff, sizeof(ev->buff));
 	event_del(epfd, ev);
 
 	if (len > 0) {
 		ev->len += len;
 		ev->buff[ev->len] = '\0';
-		printf("C[%d]:%s\n", fd, ev->buff);
+		printf("[%s]:recv [fd=%d], [c:%d<->s:%d]%s\n", __func__, fd, len, ev->len, ev->buff);
+
 
 		//chage to send event
 		event_set(ev, fd, send_data, ev);
+		/*
+		 * 这里有个bug, 当server端接收到客户端数据后,event_set(ev, fd, send_data, ev);
+		 * 重新清空ev里面的buf,就会导致客户端收到服务器传送为空的buf, 引发send_data里
+		 * 的send error.
+		 *
+		 * 若要使用event_set的话, 新建个buf
+		 */
+		memcpy(ev->buff, buff, sizeof(buff));
 		event_add(epfd, EPOLLOUT, ev);
 	}
 	else if (len == 0) {
@@ -209,7 +221,7 @@ void send_data(int fd, int events, void *arg)
 	else {
 		close(ev->fd);
 		event_del(epfd, ev);
-		printf("[%s]:send[fd=%d] error[%d]\n", __func__, fd, errno);
+		printf("[%s]:send [fd=%d] error[%d]\n", __func__, fd, errno);
 	}
 }
 
@@ -252,7 +264,7 @@ void accep_connent(int fd, int events, void *arg)
 	event_add(epfd, EPOLLIN, &event_list[i]);
 
 	output:
-	printf("[%s]:new conn[%s:%d][time:%d],pos[%d]\n", __func__, inet_ntoa(sin.sin_addr), 
+	printf("[%s]:new client connection[%s:%d][time:%d],pos[%d]\n", __func__, inet_ntoa(sin.sin_addr), 
 		ntohs(sin.sin_port), event_list[i].last_active, i);
 }
 
