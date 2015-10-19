@@ -5,7 +5,7 @@
 #include <fcntl.h>
 #include "tlpi_hdr.h"
 
-#define MAX_EVENTS		500
+#define MAX_EVENTS	500
 #define DEFAULT_PORT	12345
 
 typedef struct _event {
@@ -19,8 +19,8 @@ typedef struct _event {
 	long last_active;
 } event;
 
-int epfd; 				//epoll例程
-event event_list[MAX_EVENTS + 1]; 	//fd事件列表, 最后一个是用于服务器的fd
+int epfd;				//epoll例程
+event event_list[MAX_EVENTS + 1];	//fd事件列表, 最后一个是用于服务器的fd
 
 void event_set(event *ev, int fd, void (*event_handler)(int, int, void*), void *arg);
 void event_add(int efd, int events, event *ev);
@@ -187,6 +187,7 @@ void recv_data(int fd, int events, void *arg)
 		 * 若要使用event_set的话, 新建个buf
 		 */
 		memcpy(ev->buff, buff, sizeof(buff));
+		ev->len = sizeof(buff); //这个要记得赋值
 		event_add(epfd, EPOLLOUT, ev);
 	}
 	else if (len == 0) {
