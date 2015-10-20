@@ -3,24 +3,46 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <fcntl.h>
+#include <signal.h>
+#include <time.h>
 #include "tlpi_hdr.h"
 
-#define MAX_EVENTS	500
-#define DEFAULT_PORT	12345
+#define _DEBUG
+
+#ifdef _DEBUG
+#define __QUOTE(x)			# x
+#define  _QUOTE(x)			__QUOTE(x)
+
+#define log_debug(fmt, ...) do {                                                                    \
+		time_t t      = time(NULL);                                                                 \
+		struct tm *dm = localtime(&t);                                                              \
+                                                                                                    \
+		fprintf(stdout, "[%02d:%02d:%02d] echo_serv.c:[" _QUOTE(__LINE__) "]\t          %-26s: "    \
+				fmt "\n", dm->tm_hour, dm->tm_min, dm->tm_sec, __func__, ## __VA_ARGS__);           \
+		fflush(stdout);                                                                             \
+} while (0)
+
+#else
+#define log_debug(fmt, ...)	do{} while (0)
+#endif
+
+#define STATUS          "OK"
+#define MAX_EVENTS      500
+#define DEFAULT_PORT    12345
 
 typedef struct _event {
-	int fd;
-	void (*event_handler)(int fd, int events, void *arg);
-	int events;
-	void *arg;
-	int status; //1:in epoll wait list, 0 not in
-	char buff[128];
-	int len, s_offset;
-	long last_active;
+	int 	fd;
+	void 	(*event_handler)(int fd, int events, void *arg);
+	int 	events;
+	void 	*arg;
+	int  	status; //1:in epoll wait list, 0 not in
+	char 	buff[128];
+	int 	len, s_offset;
+	long 	last_active;
 } event;
 
-int epfd;				//epoll例程
-event event_list[MAX_EVENTS + 1];	//fd事件列表, 最后一个是用于服务器的fd
+int epfd;                           //epoll例程
+event event_list[MAX_EVENTS + 1];   //fd事件列表, 最后一个是用于服务器的fd
 
 void event_set(event *ev, int fd, void (*event_handler)(int, int, void*), void *arg);
 void event_add(int efd, int events, event *ev);
@@ -30,12 +52,27 @@ void listen_socket(short port);
 void accep_connent(int fd, int events, void *arg);
 void send_data(int fd, int events, void *arg);
 void recv_data(int fd, int events, void *arg);
+void kill_server(void);
+static void sighandler(int signal);
 
 int main(int argc, char **argv)
 {
 	int i;
 	long now, duration;
 	unsigned short port = DEFAULT_PORT;
+
+	/* 设置信号处理 */
+	sigset_t sigset;
+	sigemptyset(&sigset);
+
+	struct sigaction siginfo = {
+		.sa_handler = sighandler,
+		.sa_mask    = sigset,
+		.sa_flags   = SA_RESTART,
+	};
+
+	sigaction(SIGTERM, &siginfo, NULL);
+
 
 	if (argc == 2) {
 		port = getLong(argv[1], 0, "port-num");
@@ -47,15 +84,15 @@ int main(int argc, char **argv)
 	if (epfd <= 0) {
 		errExit("[%s]:create epoll failed.epfd[%d].\n", __func__, epfd);
 	}
+	log_debug("created epoll fd [epfd=%d]", epfd);
 
 	listen_socket(port);
-
-	printf ("[%s]:server running: port[%d]\n", __func__, port);
+	log_debug("server running on port [port=%d]", port);
 
 	struct epoll_event events[MAX_EVENTS];
 	int check_pos = 0;
 
-	while(1)
+	while(strcmp(STATUS, "OK") == 0)
 	{
 		now = time(NULL);
 
@@ -74,8 +111,8 @@ int main(int argc, char **argv)
 			duration = now - event_list[check_pos].last_active;
 			if (duration >= 60) {
 				close(event_list[check_pos].fd);
-				printf("[%s]:[fd=%d,pos=%d] last[%d] now[%d] timeout[%d].\n", 
-					__func__, event_list[check_pos].fd, check_pos, event_list[check_pos].last_active, now, duration);
+				log_debug("client timeout[%ds], fd[%d], pos[%d]", 
+					duration, event_list[check_pos].fd, check_pos);
 
 				event_del(epfd, &event_list[check_pos]);
 			}
@@ -144,9 +181,9 @@ void event_add(int efd, int events, event *ev)
 	}
 
 	if (epoll_ctl(efd, op, ev->fd, &epv) < 0)
-		printf("[%s]:event add failed[fd=%d], events[%d]\n", __func__, ev->fd, events);
+		log_debug("event add failed [fd=%d], events[%d]", ev->fd, events);
 	else
-		printf("[%s]:event add ok[fd=%d], op=%d, events[%0x]\n", __func__, ev->fd, op, events);
+		log_debug("event add ok [fd=%d], op=%d, events[%0x]", ev->fd, op, events);
 }
 
 void event_del(int efd, event *ev)
@@ -174,9 +211,7 @@ void recv_data(int fd, int events, void *arg)
 	if (len > 0) {
 		ev->len += len;
 		ev->buff[ev->len] = '\0';
-		printf("[%s]:recv [fd=%d], [c:%d<->s:%d]%s\n", __func__, fd, len, ev->len, ev->buff);
-
-
+		log_debug("recv [fd=%d], [c:%d<->s:%d] [data:%s]", fd, len, ev->len, ev->buff);
 		//chage to send event
 		event_set(ev, fd, send_data, ev);
 		/*
@@ -192,11 +227,11 @@ void recv_data(int fd, int events, void *arg)
 	}
 	else if (len == 0) {
 		close(ev->fd);
-		printf("[%s]:[fd=%d], pos[%d], close gracefully.\n", __func__, fd, ev - event_list);
+		log_debug("[fd=%d], pos[%d], close gracefully", fd, ev - event_list);
 	}
 	else {
 		close(ev->fd);
-		printf("[%s]:recv[fd=%d] error[%d]:%s\n", __func__, fd, errno, strerror(errno));
+		log_debug("recv[fd=%d] error[%d]:%s", fd, errno, strerror(errno));
 	}
 }
 
@@ -209,7 +244,7 @@ void send_data(int fd, int events, void *arg)
 	len = send(fd, ev->buff + ev->s_offset, ev->len - ev->s_offset, 0);
 
 	if (len > 0) {
-		printf("[%s]:send [fd=%d], [%d<->%d]%s\n", __func__, fd, len, ev->len, ev->buff);
+		log_debug("send [fd=%d], [%d<->%d] [data:%s]", fd, len, ev->len, ev->buff);
 		ev->s_offset += len;
 
 		if (ev->s_offset == ev->len) {
@@ -222,7 +257,7 @@ void send_data(int fd, int events, void *arg)
 	else {
 		close(ev->fd);
 		event_del(epfd, ev);
-		printf("[%s]:send [fd=%d] error[%d]\n", __func__, fd, errno);
+		log_debug("send [fd=%d] error[%d]", fd, errno);
 	}
 }
 
@@ -244,7 +279,7 @@ void accep_connent(int fd, int events, void *arg)
 	}
 
 	if (i == MAX_EVENTS) {
-		printf("[%s]:max connection limit[%d].", __LINE__, MAX_EVENTS);
+		log_debug("max connection limit[%d]", MAX_EVENTS);
 		close(nfd);//达到最大连接数关闭 nfd
 		goto output;
 	}
@@ -252,7 +287,7 @@ void accep_connent(int fd, int events, void *arg)
 	//set nonblocking
 	int iret = 0;
 	if ((iret = fcntl(nfd, F_SETFL, O_NONBLOCK)) < 0) {
-		printf("[%s]: fcntl nonblocking failed:%d", __LINE__, iret);
+		log_debug("fcntl nonblocking failed:%d", iret);
 		goto output;
 	}
 
@@ -265,7 +300,7 @@ void accep_connent(int fd, int events, void *arg)
 	event_add(epfd, EPOLLIN, &event_list[i]);
 
 	output:
-	printf("[%s]:new client connection[%s:%d][time:%d],pos[%d]\n", __func__, inet_ntoa(sin.sin_addr), 
+	log_debug("new client connection[%s:%d][time:%d],pos[%d]", inet_ntoa(sin.sin_addr), 
 		ntohs(sin.sin_port), event_list[i].last_active, i);
 }
 
@@ -274,7 +309,7 @@ void listen_socket(short port)
 	int fd = socket(AF_INET, SOCK_STREAM, 0);
 	fcntl(fd, F_SETFL, O_NONBLOCK);
 
-	printf("[%s]:server listen on fd = %d\n", __func__, fd);
+	log_debug("server listen on fd = %d", fd);
 
 	//在event_list列表尾添加server的fd监听事件
 	event_set(&event_list[MAX_EVENTS], fd, accep_connent, &event_list[MAX_EVENTS]);
@@ -296,6 +331,18 @@ void listen_socket(short port)
 	if (listen(fd, 5) == -1) {
 		errExit("[%s]:listen, error[%d]\n", __LINE__, errno);
 	}
+}
+
+void kill_server(void)
+{
+#undef STATUS
+#define STATUS "EXIT"
+}
+
+static void sighandler(int signal)
+{
+	log_debug("received signal %d: %s. Shutting down", signal, strsignal(signal));
+	kill_server();
 }
 
 // var url = 'http://blog.csdn.net/sparkliang/article/details/4770655';
