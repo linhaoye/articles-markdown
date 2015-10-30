@@ -83,7 +83,11 @@ typedef struct mc_event_base_
     struct llhead * active_list;
     unsigned int    event_num;          //事件个数
     unsigned int    event_actvie_num;   //已激活事件个数
+
+#if (HAVE_EPOLL)
     int             epoll_fd;           //epoll_create创建的epoll例程
+#endif
+
     int             ev_base_stop;       //判断是否停止的标志位
     int             magic;              //定义为一个宏
     struct timeval  event_time;
@@ -113,6 +117,8 @@ int mc_event_set(mc_event_t *ev, short revent, int fd, mc_ev_callback callback, 
 int mc_event_post(mc_event_t *ev, mc_event_base_t *base);
 /* 事件路由, 反应开始循环, 等待事伯的发生 */
 int mc_dispatch(mc_event_base_t *base);
+/* 释放反应堆 */
+void mc_base_dispose(mc_event_base_t * base);
 
 //将事件加入队列
 static void add_event_to_queue(mc_event_t *ev, void * queue);
@@ -120,6 +126,9 @@ static void add_event_to_queue(mc_event_t *ev, void * queue);
 static void del_event_from_queue(mc_event_t *ev);
 //事件队列dequeue
 static mc_event_t * get_event_and_del(void * queue);
+//清空队列
+static void destroy_queue_events(void * queue);
+static void destroy_queue_events_safe(void *queue);
 //打印事件列表
 static void log_printf_events(void * queue);
 
@@ -154,12 +163,67 @@ mc_event_opt mc_event_op_val = {
 #define mc_event_loop    mc_event_op_val.dispatch;
 
 
-#define mc_sock_fd          int
-#define DEFAULT_NET         AF_NET
-#define DEFAULT_DATA_GRAM   SOCK_STREAM
 #define DEFAULT_PORT        12345
 #define DEFAULT_BACKLOG     200
 
+/* vector的定义 */
+struct vec
+{
+    int         len;
+    const void  *ptr;
+};
+
+/* HTTP URL */
+struct url
+{
+    struct vec  proto;
+    struct vec  user;
+    struct vec  pass;
+    struct vec  host;
+    struct vec  port;
+    struct vec  uri;
+};
+
+/* HTTP 报头 */
+struct hthdr
+{
+    struct vec name;
+    struct vec value;
+};
+
+/* HTTP information */
+struct hti
+{
+    struct vec      method;
+    struct vec      url;
+    struct hthdr    hh[64];     /* 报头*/
+    int             nhdrs;
+    int             reqlen;
+    int             totlen;
+};
+
+struct sa
+{
+    socklen_t len;
+    union {
+        struct sockaddr     sa;
+        struct sockaddr_in  sin;
+    } u;
+
+/* WITH_IPV6 */
+#ifdef WITH_IPV6
+    struct sockaddr_in6     sin6;
+#endif 
+};
+
+struct iobuf
+{
+    mc_event_t  read;
+    mc_event_t  write;
+    char        buf[16 * 1024];
+    int         nread;
+    int         nwritten;
+};
 
 /*
  * 定义一个connection结构, 用于表示每一个到来的连接
@@ -167,10 +231,30 @@ mc_event_opt mc_event_op_val = {
 typedef struct connection_
 {
     int                 fd;         //注册在反应堆的fd
-    mc_event_t          read;       //读事件
-    mc_event_t          write;      //写事件
-    char                buf[1024];  //缓冲区
+    struct sa           sa;
+    struct iobuf        remote;
+    struct hti          hti;
+    struct vec          uri;
+    struct vec          req;
+    struct vec          auth;
+    struct vec          cookie;
+    struct vec          clength;
+    struct vec          ctype;
+    struct vec          status;
+    struct vec          location;
+    time_t              ims;
+    time_t              expire;
+    char                user[32];
+    int                 ntotal;
+    int                 nexpected;
+
+    char                gotrequest;
+    char                gotreply;
+    char                cgimode;
+    char                sslaccepted;
+
     mc_event_base_t     *base;      //指向反应堆的指针
+
 } mc_connection;
 
 #define __QUOTE(x)      # x
@@ -192,21 +276,82 @@ typedef struct connection_
 
 #define LOG_ERROR(fmt, ...) LOG_OUTPUT(stderr, fmt, ## __VA_ARGS__)
 
-
-static void setreuseaddr(mc_sock_fd fd);
-static int mc_socket();
-static int mc_bind(mc_sock_fd listenfd);
-static int mc_listen(mc_sock_fd listenfd);
+static int blockmode(int fd, int block);
+static int mc_listen(uint16_t listenfd);
 static void handler_accept(int fd, short revent, void *args);
 static void handler_read(int fd, short revent, void *args);
 static void hnadler_write(int fd, short revent, void *args);
 static void cab(int fd, short revent, void *args);
 
-struct vec {
-    int len;
-    const void *ptr;
-    struct llhead link;
-};
+static int blockmode(int fd, int block)
+{
+    int flags, retval = 0; 
+
+    if ((flags = fcntl(fd, F_GETFL, 0)) == -1)
+    {
+        LOG_ERROR("nonblock: fcntl(%d, F_GETFL): %s", fd, strerror(ERRNO));
+        retval--;
+    }
+    else
+    {
+        if (block)
+            flags &= ~O_NONBLOCK;
+        else
+            flags |= O_NONBLOCK;
+
+        //Apply the mode
+        if (fcntl(fd, F_SETFL, flags) != 0)
+        {
+            LOG_ERROR("nonblock: fcntl(%d, F_SETFL): %s", fd, strerror(ERRNO));
+            retval--;
+        }
+    }
+
+    return (retval);
+}
+
+static int mc_listen(uint16_t port)
+{
+    int sock, on = 1, af;
+    struct sa sa;
+
+#ifdef WITH_IPV6
+    af = PF_INET6;
+#else
+    af = PF_INET;
+#endif
+
+    if ((sock = socket(af, SOCK_STREAM, 6)) == -1)
+    {
+        LOG_ERROR("Listen: socket: %s", strerror(ERRNO));
+        return -1;
+    }
+
+    blockmode(sock, 0);
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *) &on, sizeof(on));
+
+#ifdef WITH_IPV6
+    sa.u.sin6.sin6_family = af;
+    sa.u.sin6.sin6_port = htons(port);
+    sa.u.sin6.sin6_addr = in6addr_any;
+    sa.len = sizeof(sa.u.sin6);
+#else
+    sa.u.sin_family = af;
+    sa.u.sin_port = htons(port);
+    sa.u.sin_addr.s_addr = INADDR_ANY;
+    sa.len = sizeof(sa.u.sin);
+#endif
+
+    if (bind(sock, &sa.u.sa, sa.len) < 0)
+    {
+        LOG_ERROR("Listen: af %d bind(%d):%s", af, port, strerror(ERRNO));
+        return -1;
+    }
+
+    (void) listen(sock, 16);
+
+    return (sock);
+}
 
 int main(int argc, char const *argv[])
 {
@@ -240,25 +385,45 @@ int main(int argc, char const *argv[])
         LOG_DEBUG("%d, %d", tmp->ptr, tmp->len);
     }*/
 
-    mc_event_base_t * base = mc_base_new();
+    /*mc_event_base_t * base = mc_base_new();
 
-    /*int i;
+    int i;
     for (i = 0; i < 10; i++) {
         mc_event_t * ev = malloc(sizeof(mc_event_t));
 
         ev->ev_fd = i;
 
-        add_event_to_queue(ev, (void*)base->added_list);
-    }*/
+        add_event_to_queue(ev, base->added_list);
+    }
 
-    log_printf_events((void*)base->added_list);
+    log_printf_events(base->added_list);
+
+
+    mc_base_dispose(base);*/
+
+
+    /*log_printf_events((void*)base->added_list);
 
     printf ("\n");
     get_event_and_del((void*)base->added_list);
     get_event_and_del((void*)base->added_list);
-    printf ("\n");
+    printf ("\n");*/
 
-    log_printf_events((void*)base->added_list);
+    // log_printf_events(base->added_list);
+
+    // destroy_queue_events_safe(base->added_list);
+    // destroy_queue_events_safe(base->added_list);
+    //destroy_queue_events(base->added_list);
+    //destroy_queue_events(base->added_list);
+
+    mc_connection lc;
+    mc_event_base_t * base = mc_base_new();
+
+    lc.base = base; 
+
+    int sockfd = mc_socket();
+
+
 
     return 0;
 }
@@ -269,7 +434,7 @@ mc_event_base_t * mc_base_new(void)
 
     if (base == NULL)
     {
-        LOG_ERROR("Init the base moudle FAIL");
+        LOG_ERROR("Init the base moudule FAIL");
         return NULL;
     }
 
@@ -287,9 +452,28 @@ mc_event_base_t * mc_base_new(void)
 
     gettimeofday(&base->event_time, NULL);
 
-    //mc_event_init(base);
+    mc_event_init(base);
 
     return base;
+}
+
+void mc_base_dispose(mc_event_base_t * base)
+{
+     if (base == NULL)
+     {
+        LOG_ERROR("Release the base moudule FAIL!");
+        return ;
+     }
+
+     //删除队列中的事件
+     destroy_queue_events_safe(base->added_list);
+     destroy_queue_events_safe(base->active_list);
+
+#if (HAVE_EPOLL)
+     close(base->epoll_fd);
+#endif
+
+     free(base);
 }
 
 int mc_event_set(mc_event_t *ev, short revent, int fd, mc_ev_callback callback, void *args)
@@ -376,7 +560,7 @@ int mc_event_post(mc_event_t *ev, mc_event_base_t * base)
 
     int err;
     ev->base = base;
-    LL_TAIL(base->added_list, &ev->link);
+    add_event_to_queue(ev, base->added_list);
     base->event_num++;
 
     err = mc_event_add(NULL, ev);
@@ -514,7 +698,7 @@ static mc_event_t * get_event_and_del(void * queue)
     struct llhead *ptr, *head = (struct llhead *) queue;
     mc_event_t *ev;
 
-    if (head->next == head->prev)
+    if (head == head->next)
     {
         LOG_ERROR("the queue is empty!");
         return NULL;
@@ -533,14 +717,64 @@ static mc_event_t * get_event_and_del(void * queue)
     return ev;
 }
 
-static void log_printf_events(void * queue)
+static void destroy_queue_events(void * queue)
 {
-    struct llhead *ptr, *head;
+    struct llhead * head = (struct llhead *) queue; 
     mc_event_t *ev;
 
-    head = (struct llhead *) queue;
+    if (head == head->next)
+    {
+        LOG_ERROR("the queue is empty!");
+        return;
+    }
 
-    if (head->next == head->prev)
+    while(head != head->next)
+    {
+        ev = get_event_and_del(head);
+
+        LOG_DEBUG("del event [ev_fd=%d]", ev->ev_fd);
+
+        if (ev != NULL)
+        {
+            free(ev);
+        }
+    }
+
+    LL_INIT(head);
+}
+
+static void destroy_queue_events_safe(void *queue)
+{
+    struct llhead *ptr, *tmp, *head = (struct llhead *) queue;
+    mc_event_t *ev;
+
+    if (head == head->next)
+    {
+        LOG_ERROR("the queue is empty!");
+        return;
+    }
+
+    LL_FOREACH_SAFE(head, ptr, tmp)
+    {
+        ev = LL_ENTRY(ptr, mc_event_t, link);
+
+        LOG_DEBUG("del event [ev_fd=%d]", ev->ev_fd);
+
+        if (ev != NULL)
+        {
+            free(ev);
+        }
+    }
+
+    LL_INIT(head);
+}
+
+static void log_printf_events(void * queue)
+{
+    struct llhead *ptr, *head = (struct llhead *) queue;
+    mc_event_t *ev;
+
+    if (head == head->next)
     {
         LOG_ERROR("the queue is empty!");
         return;
@@ -553,16 +787,17 @@ static void log_printf_events(void * queue)
     }
 }
 
-static void *mc_epoll_init(mc_event_base_t *meb)
+static void *mc_epoll_init(mc_event_base_t * base)
 {
-    if (meb->magic != MC_BASE_MAGIC)
+    if (base->magic != MC_BASE_MAGIC)
     {
         LOG_DEBUG("event base not initialize!");
         return NULL;
     }
-    meb->epoll_fd = epoll_create(MC_EVENT_MAX);
 
-    return meb;
+    base->epoll_fd = epoll_create(MC_EVENT_MAX);
+
+    return base;
 }
 
 static int mc_epoll_add(void *arg, mc_event_t *ev)
