@@ -38,6 +38,25 @@
 
 #define MC_EVENT_MAX    1000
 
+#define __QUOTE(x)      # x
+#define  _QUOTE(x)      __QUOTE(x)
+
+#define LOG_OUTPUT(std, fmt, ...) do {                                                  \
+            time_t t = time(NULL);                                                      \
+            struct tm *dm = localtime(&t);                                              \
+                                                                                        \
+            fprintf(std, "[%02d:%02d:%02d] %s:[" _QUOTE(__LINE__) "]\t       %-26s:"    \
+                    fmt "\n", dm->tm_hour, dm->tm_min, dm->tm_sec, __FILE__, __func__,  \
+                    ## __VA_ARGS__);                                                    \
+            fflush(stdout);                                                             \
+} while(0)
+
+#ifdef _DEBUG
+#define LOG_DEBUG(fmt, ...) LOG_OUTPUT(stdout, fmt, ## __VA_ARGS__)
+#endif
+
+#define LOG_ERROR(fmt, ...) LOG_OUTPUT(stderr, fmt, ## __VA_ARGS__)
+
 /* 双向链表的宏定义 */
  struct llhead {
     struct llhead *prev, *next;
@@ -108,6 +127,288 @@ typedef struct mc_event_
     int             ev_flags;
     mc_event_base_t *base;
 } mc_event_t;
+
+
+/* 为事件封装的操作 */
+typedef struct mc_event_opt_
+{
+    void * (*init)(mc_event_base_t *);                              //初始化
+    int    (*add)(void *, mc_event_t *);                            //加入队列
+    int    (*del)(void *, mc_event_t *);                            //删除事件
+    int    (*mod)(void *, mc_event_t *);                            //修改事件
+    int    (*dispatch)(void *, mc_event_base_t *, struct timeval);  //循环监听事件
+} mc_event_opt;
+
+static void * mc_epoll_init(mc_event_base_t *meb);
+static int mc_epoll_add(void *arg, mc_event_t *ev);
+static int mc_epoll_del(void *arg, mc_event_t *ev);
+static int mc_epoll_mod(void *arg, mc_event_t *ev);
+static int mc_epoll_loop(void *arg, mc_event_base_t *meb, struct timeval ev_timeval);
+
+mc_event_opt mc_event_op_val = {
+    mc_epoll_init,
+    mc_epoll_add,
+    mc_epoll_del,
+    mc_epoll_mod,
+    mc_epoll_loop
+};
+
+#define mc_event_init    mc_event_op_val.init;
+#define mc_event_add     mc_event_op_val.add;
+#define mc_event_del     mc_event_op_val.del;
+#define mc_event_mod     mc_event_op_val.mod;
+#define mc_event_loop    mc_event_op_val.dispatch;
+
+static void *mc_epoll_init(mc_event_base_t * base)
+{
+    if (base->magic != MC_BASE_MAGIC)
+    {
+        LOG_DEBUG("event base not initialize!");
+        return NULL;
+    }
+
+    base->epoll_fd = epoll_create(MC_EVENT_MAX);
+
+    return base;
+}
+
+static int mc_epoll_add(void *arg, mc_event_t *ev)
+{
+    if (ev->base->magic != MC_BASE_MAGIC)
+    {
+        LOG_DEBUG("event base not initialize!");
+        return -1;
+    }
+
+    mc_event_base_t *base = ev->base;
+
+    int err, epoll_fd = base->epoll_fd;
+    struct epoll_event epoll_ev;
+
+    epoll_ev.data.ptr = ev;
+    epoll_ev.events = EPOLLIN | EPOLLET;
+
+    if (!(ev->ev_flags & MC_EV_ADDED))
+    {
+        err = epoll_ctl(epoll_fd, EPOLL_CTL_ADD, ev->ev_fd, &epoll_ev);
+
+        if (err != 0)
+        {
+            LOG_DEBUG("epoll_ctl add [fd=%d] fail!", ev->ev_fd);
+            return -1;
+        }
+        ev->ev_flags |= MC_EV_ADDED;
+    }
+    return 0;
+}
+
+static int mc_epoll_del(void * arg, mc_event_t *ev)
+{
+    if (ev->base->magic != MC_BASE_MAGIC)
+    {
+        LOG_ERROR("event base not initialize!");
+        return -1;
+    }
+
+    mc_event_base_t *base = ev->base ;
+
+    int err, epoll_fd = base->epoll_fd ;
+
+    if( !(ev->ev_flags & MC_EV_INITD) )
+    {
+        return -1 ;
+    }
+    err = epoll_ctl(epoll_fd, EPOLL_CTL_DEL, ev->ev_fd, NULL);
+
+    if( err != 0 )
+    {
+        LOG_DEBUG("epoll_ctl del [fd=%d] fail!", ev->ev_fd);
+        return -1;
+    }
+    ev->ev_flags = 0x0000;
+
+    return 0;
+}
+
+static int mc_epoll_mod(void *arg, mc_event_t *ev)
+{
+    if (ev->base->magic != MC_BASE_MAGIC)
+    {
+        LOG_DEBUG("event base not noinitlized!");
+        return -1;
+    }
+
+    if (arg == NULL)
+    {
+        return 0;
+    }
+
+    mc_event_base_t * base = ev->base;
+
+    int err, epoll_fd = base->epoll_fd;
+    unsigned int mode;
+
+    if (!(ev->ev_flags & MC_EV_INITD))
+    {
+        return -1;
+    }
+
+    struct epoll_event epoll_ev;
+    epoll_ev.data.ptr = ev;
+
+    mode = *(unsigned int *)arg;
+    epoll_ev.events = mode;
+    err = epoll_ctl(epoll_fd, EPOLL_CTL_MOD, ev->ev_fd, &epoll_ev);
+
+    if (err != 0)
+    {
+        LOG_DEBUG("mc_epoll_del the epoll_ctl error");
+        return -1;
+    }
+
+    return 1;
+}
+
+static int mc_epoll_loop(void *arg, mc_event_base_t *base, struct timeval ev_timeval)
+{
+    if (base == NULL)
+    {
+        LOG_ERROR("base == NULL");
+        return -1;
+    }
+
+    if (base->magic != MC_BASE_MAGIC)
+    {
+        LOG_ERROR("reactor base noinitlized!");
+        return -1;
+    }
+
+    int nfds;
+
+    struct epoll_event *nevents = (struct epoll_event *) arg;
+    nfds = epoll_wait(base->epoll_fd, nevents, MC_EVENT_MAX, 1);
+
+    if (nfds <= -1)
+    {
+        LOG_ERROR("epoll_wait() error!");
+    }
+
+    return nfds;
+}
+
+/***************************************************************************************************/
+
+static void add_event_to_queue(mc_event_t *ev, void * queue);   //将事件加入队列
+static void del_event_from_queue(mc_event_t *ev);               //将事件从队列删除
+static mc_event_t * get_event_and_del(void * queue);            //事件dequeue
+static void destroy_queue_events(void * queue);                 //清空队列
+static void destroy_queue_events_safe(void *queue);             //安全删除队列事件
+static void log_printf_events(void * queue);                    //打印队件事件
+
+static void add_event_to_queue(mc_event_t *ev, void * queue)
+{
+    struct llhead * head = (struct llhead *) queue;
+
+    LL_TAIL(head, &ev->link);
+}
+
+static void del_event_from_queue(mc_event_t *ev)
+{
+    if (ev != NULL)
+        LL_DEL(&ev->link);
+    else
+        LOG_ERROR("event *ev == NULL");
+}
+
+static mc_event_t * get_event_and_del(void * queue)
+{
+    struct llhead *ptr, *head = (struct llhead *) queue;
+    mc_event_t *ev;
+
+    if (head == head->next)
+    {
+        LOG_ERROR("the queue is empty!");
+        return NULL;
+    }
+
+    ptr = head->next;
+    ev = LL_ENTRY(ptr, mc_event_t, link);
+
+    if (ev == NULL)
+        return NULL;
+
+    LL_DEL(&ev->link);
+
+    return ev;
+}
+
+static void destroy_queue_events(void * queue)
+{
+    struct llhead * head = (struct llhead *) queue; 
+    mc_event_t *ev;
+
+    if (head == head->next)
+    {
+        LOG_ERROR("the queue is empty!");
+        return;
+    }
+
+    while(head != head->next)
+    {
+        ev = get_event_and_del(head);
+
+        LOG_DEBUG("del event [ev_fd=%d]", ev->ev_fd);
+
+        if (ev != NULL)
+            free(ev);
+    }
+
+    LL_INIT(head);
+}
+
+static void destroy_queue_events_safe(void *queue)
+{
+    struct llhead *ptr, *tmp, *head = (struct llhead *) queue;
+    mc_event_t *ev;
+
+    if (head == head->next)
+    {
+        LOG_ERROR("the queue is empty!");
+        return;
+    }
+
+    LL_FOREACH_SAFE(head, ptr, tmp)
+    {
+        ev = LL_ENTRY(ptr, mc_event_t, link);
+
+        LOG_DEBUG("del event [ev_fd=%d]", ev->ev_fd);
+
+        if (ev != NULL)
+            free(ev);
+    }
+
+    LL_INIT(head);
+}
+
+static void log_printf_events(void * queue)
+{
+    struct llhead *ptr, *head = (struct llhead *) queue;
+    mc_event_t *ev;
+
+    if (head == head->next)
+    {
+        LOG_ERROR("the queue is empty!");
+        return;
+    }
+
+    LL_FOREACH(head, ptr)
+    {
+        ev = LL_ENTRY(ptr, mc_event_t, link);
+        LOG_DEBUG("event:[ev_fd=%d] [revent=%x]", ev->ev_fd, ev->revent);
+    }
+}
+
+/***************************************************************************************************/
 
 /* 新建一个reactor结构体 */
 mc_event_base_t *mc_base_new(void);
@@ -358,284 +659,7 @@ int mc_dispatch(mc_event_base_t * base)
 
 /***************************************************************************************************/
 
-static void add_event_to_queue(mc_event_t *ev, void * queue);   //将事件加入队列
-static void del_event_from_queue(mc_event_t *ev);               //将事件从队列删除
-static mc_event_t * get_event_and_del(void * queue);            //事件dequeue
-static void destroy_queue_events(void * queue);                 //清空队列
-static void destroy_queue_events_safe(void *queue);             //安全删除队列事件
-static void log_printf_events(void * queue);                    //打印队件事件
 
-static void add_event_to_queue(mc_event_t *ev, void * queue)
-{
-    struct llhead * head = (struct llhead *) queue;
-
-    LL_TAIL(head, &ev->link);
-}
-
-static void del_event_from_queue(mc_event_t *ev)
-{
-    if (ev != NULL)
-        LL_DEL(&ev->link);
-    else
-        LOG_ERROR("event *ev == NULL");
-}
-
-static mc_event_t * get_event_and_del(void * queue)
-{
-    struct llhead *ptr, *head = (struct llhead *) queue;
-    mc_event_t *ev;
-
-    if (head == head->next)
-    {
-        LOG_ERROR("the queue is empty!");
-        return NULL;
-    }
-
-    ptr = head->next;
-    ev = LL_ENTRY(ptr, mc_event_t, link);
-
-    if (ev == NULL)
-        return NULL;
-
-    LL_DEL(&ev->link);
-
-    return ev;
-}
-
-static void destroy_queue_events(void * queue)
-{
-    struct llhead * head = (struct llhead *) queue; 
-    mc_event_t *ev;
-
-    if (head == head->next)
-    {
-        LOG_ERROR("the queue is empty!");
-        return;
-    }
-
-    while(head != head->next)
-    {
-        ev = get_event_and_del(head);
-
-        LOG_DEBUG("del event [ev_fd=%d]", ev->ev_fd);
-
-        if (ev != NULL)
-            free(ev);
-    }
-
-    LL_INIT(head);
-}
-
-static void destroy_queue_events_safe(void *queue)
-{
-    struct llhead *ptr, *tmp, *head = (struct llhead *) queue;
-    mc_event_t *ev;
-
-    if (head == head->next)
-    {
-        LOG_ERROR("the queue is empty!");
-        return;
-    }
-
-    LL_FOREACH_SAFE(head, ptr, tmp)
-    {
-        ev = LL_ENTRY(ptr, mc_event_t, link);
-
-        LOG_DEBUG("del event [ev_fd=%d]", ev->ev_fd);
-
-        if (ev != NULL)
-            free(ev);
-    }
-
-    LL_INIT(head);
-}
-
-static void log_printf_events(void * queue)
-{
-    struct llhead *ptr, *head = (struct llhead *) queue;
-    mc_event_t *ev;
-
-    if (head == head->next)
-    {
-        LOG_ERROR("the queue is empty!");
-        return;
-    }
-
-    LL_FOREACH(head, ptr)
-    {
-        ev = LL_ENTRY(ptr, mc_event_t, link);
-        LOG_DEBUG("event:[ev_fd=%d] [revent=%x]", ev->ev_fd, ev->revent);
-    }
-}
-
-/***************************************************************************************************/
-
-/* 为事件封装的操作 */
-typedef struct mc_event_opt_
-{
-    void * (*init)(mc_event_base_t *);                              //初始化
-    int    (*add)(void *, mc_event_t *);                            //加入队列
-    int    (*del)(void *, mc_event_t *);                            //删除事件
-    int    (*mod)(void *, mc_event_t *);                            //修改事件
-    int    (*dispatch)(void *, mc_event_base_t *, struct timeval);  //循环监听事件
-} mc_event_opt;
-
-static void * mc_epoll_init(mc_event_base_t *meb);
-static int mc_epoll_add(void *arg, mc_event_t *ev);
-static int mc_epoll_del(void *arg, mc_event_t *ev);
-static int mc_epoll_mod(void *arg, mc_event_t *ev);
-static int mc_epoll_loop(void *arg, mc_event_base_t *meb, struct timeval ev_timeval);
-
-mc_event_opt mc_event_op_val = {
-    mc_epoll_init,
-    mc_epoll_add,
-    mc_epoll_del,
-    mc_epoll_mod,
-    mc_epoll_loop
-};
-
-#define mc_event_init    mc_event_op_val.init;
-#define mc_event_add     mc_event_op_val.add;
-#define mc_event_del     mc_event_op_val.del;
-#define mc_event_mod     mc_event_op_val.mod;
-#define mc_event_loop    mc_event_op_val.dispatch;
-
-static void *mc_epoll_init(mc_event_base_t * base)
-{
-    if (base->magic != MC_BASE_MAGIC)
-    {
-        LOG_DEBUG("event base not initialize!");
-        return NULL;
-    }
-
-    base->epoll_fd = epoll_create(MC_EVENT_MAX);
-
-    return base;
-}
-
-static int mc_epoll_add(void *arg, mc_event_t *ev)
-{
-    if (ev->base->magic != MC_BASE_MAGIC)
-    {
-        LOG_DEBUG("event base not initialize!");
-        return -1;
-    }
-
-    mc_event_base_t *base = ev->base;
-
-    int err, epoll_fd = base->epoll_fd;
-    struct epoll_event epoll_ev;
-
-    epoll_ev.data.ptr = ev;
-    epoll_ev.events = EPOLLIN | EPOLLET;
-
-    if (!(ev->ev_flags & MC_EV_ADDED))
-    {
-        err = epoll_ctl(epoll_fd, EPOLL_CTL_ADD, ev->ev_fd, &epoll_ev);
-
-        if (err != 0)
-        {
-            LOG_DEBUG("epoll_ctl add [fd=%d] fail!", ev->ev_fd);
-            return -1;
-        }
-        ev->ev_flags |= MC_EV_ADDED;
-    }
-    return 0;
-}
-
-static int mc_epoll_del(void * arg, mc_event_t *ev)
-{
-    if (ev->base->magic != MC_BASE_MAGIC)
-    {
-        LOG_ERROR("event base not initialize!");
-        return -1;
-    }
-
-    mc_event_base_t *base = ev->base ;
-
-    int err, epoll_fd = base->epoll_fd ;
-
-    if( !(ev->ev_flags & MC_EV_INITD) )
-    {
-        return -1 ;
-    }
-    err = epoll_ctl(epoll_fd, EPOLL_CTL_DEL, ev->ev_fd, NULL);
-
-    if( err != 0 )
-    {
-        LOG_DEBUG("epoll_ctl del [fd=%d] fail!", ev->ev_fd);
-        return -1;
-    }
-    ev->ev_flags = 0x0000;
-
-    return 0;
-}
-
-static int mc_epoll_mod(void *arg, mc_event_t *ev)
-{
-    if (ev->base->magic != MC_BASE_MAGIC)
-    {
-        LOG_DEBUG("event base not noinitlized!");
-        return -1;
-    }
-
-    if (arg == NULL)
-    {
-        return 0;
-    }
-
-    mc_event_base_t * base = ev->base;
-
-    int err, epoll_fd = base->epoll_fd;
-    unsigned int mode;
-
-    if (!(ev->ev_flags & MC_EV_INITD))
-    {
-        return -1;
-    }
-
-    struct epoll_event epoll_ev;
-    epoll_ev.data.ptr = ev;
-
-    mode = *(unsigned int *)arg;
-    epoll_ev.events = mode;
-    err = epoll_ctl(epoll_fd, EPOLL_CTL_MOD, ev->ev_fd, &epoll_ev);
-
-    if (err != 0)
-    {
-        LOG_DEBUG("mc_epoll_del the epoll_ctl error");
-        return -1;
-    }
-
-    return 1;
-}
-
-static int mc_epoll_loop(void *arg, mc_event_base_t *base, struct timeval ev_timeval)
-{
-    if (base == NULL)
-    {
-        LOG_ERROR("base == NULL");
-        return -1;
-    }
-
-    if (base->magic != MC_BASE_MAGIC)
-    {
-        LOG_ERROR("reactor base noinitlized!");
-        return -1;
-    }
-
-    int nfds;
-
-    struct epoll_event *nevents = (struct epoll_event *) arg;
-    nfds = epoll_wait(base->epoll_fd, nevents, MC_EVENT_MAX, 1);
-
-    if (nfds <= -1)
-    {
-        LOG_ERROR("epoll_wait() error!");
-    }
-
-    return nfds;
-}
 
 #define DEFAULT_PORT        12345
 #define DEFAULT_BACKLOG     200
@@ -731,24 +755,7 @@ typedef struct connection_
 
 } mc_connection;
 
-#define __QUOTE(x)      # x
-#define  _QUOTE(x)      __QUOTE(x)
 
-#define LOG_OUTPUT(std, fmt, ...) do {                                                  \
-            time_t t = time(NULL);                                                      \
-            struct tm *dm = localtime(&t);                                              \
-                                                                                        \
-            fprintf(std, "[%02d:%02d:%02d] %s:[" _QUOTE(__LINE__) "]\t       %-26s:"    \
-                    fmt "\n", dm->tm_hour, dm->tm_min, dm->tm_sec, __FILE__, __func__,  \
-                    ## __VA_ARGS__);                                                    \
-            fflush(stdout);                                                             \
-} while(0)
-
-#ifdef _DEBUG
-#define LOG_DEBUG(fmt, ...) LOG_OUTPUT(stdout, fmt, ## __VA_ARGS__)
-#endif
-
-#define LOG_ERROR(fmt, ...) LOG_OUTPUT(stderr, fmt, ## __VA_ARGS__)
 
 static int blockmode(int fd, int block);
 static int mc_listen(uint16_t listenfd);
@@ -764,7 +771,7 @@ static int blockmode(int fd, int block)
 
     if ((flags = fcntl(fd, F_GETFL, 0)) == -1)
     {
-        LOG_ERROR("nonblock: fcntl(%d, F_GETFL): %s", fd, strerror(ERRNO));
+        LOG_ERROR("nonblock: fcntl(%d, F_GETFL): %s", fd, strerror(errno));
         retval--;
     }
     else
@@ -777,7 +784,7 @@ static int blockmode(int fd, int block)
         //Apply the mode
         if (fcntl(fd, F_SETFL, flags) != 0)
         {
-            LOG_ERROR("nonblock: fcntl(%d, F_SETFL): %s", fd, strerror(ERRNO));
+            LOG_ERROR("nonblock: fcntl(%d, F_SETFL): %s", fd, strerror(errno));
             retval--;
         }
     }
@@ -798,7 +805,7 @@ static int mc_listen(uint16_t port)
 
     if ((sock = socket(af, SOCK_STREAM, 6)) == -1)
     {
-        LOG_ERROR("Listen: socket: %s", strerror(ERRNO));
+        LOG_ERROR("Listen: socket: %s", strerror(errno));
         return -1;
     }
 
@@ -811,15 +818,15 @@ static int mc_listen(uint16_t port)
     sa.u.sin6.sin6_addr = in6addr_any;
     sa.len = sizeof(sa.u.sin6);
 #else
-    sa.u.sin_family = af;
-    sa.u.sin_port = htons(port);
-    sa.u.sin_addr.s_addr = INADDR_ANY;
+    sa.u.sin.sin_family = af;
+    sa.u.sin.sin_port = htons(port);
+    sa.u.sin.sin_addr.s_addr = INADDR_ANY;
     sa.len = sizeof(sa.u.sin);
 #endif
 
     if (bind(sock, &sa.u.sa, sa.len) < 0)
     {
-        LOG_ERROR("Listen: af %d bind(%d):%s", af, port, strerror(ERRNO));
+        LOG_ERROR("Listen: af %d bind(%d):%s", af, port, strerror(errno));
         return -1;
     }
 
@@ -838,17 +845,17 @@ static void mc_accept(int lsn)
 
     if ((sock = accept(lsn, &sa.u.sa, &sa.len)) == -1)
     {
-        LOG_ERROR("accept %s", strerror(ERRNO));
+        LOG_ERROR("accept %s", strerror(errno));
     }
     else if (blockmode(sock, 0) != 0)
     {
-        LOG_ERROR("blockmode: %s", strerror(ERRNO));
+        LOG_ERROR("blockmode: %s", strerror(errno));
         (void) close(sock);
     }
     else if ((c = calloc(1, sizeof(*c))) == NULL)
     {
         (void) close(sock);
-        LOG_ERROR("calloc:%s", strerror(ERRNO));
+        LOG_ERROR("calloc:%s", strerror(errno));
     }
     else
     {
@@ -887,13 +894,15 @@ static void mc_handler_accept(int fd, short revent, void *args)
     }
 
     blockmode(s, 0);
-
     lc->fd = s;
-    mc_event_set(&(lc->remote->read), MC_EV_READ, lc->fd, mc_handler_read, lc);
-    mc_event_set(&(lc->remote->write), MC_EV_WRITE, lc->fd, mc_handler_write, lc);
-
-    mc_event_post(&(lc->remote->write, lc->base));
+    
+    mc_event_set(&(lc->remote.read), MC_EV_READ, lc->fd, mc_handler_read, lc);
+    mc_event_set(&(lc->remote.write), MC_EV_WRITE, lc->fd, mc_handler_write, lc);
+    mc_event_post(&(lc->remote.write), lc->base);
 }
+
+static void mc_handler_read(int fd, short revent, void *args){}
+static void mc_handler_write(int fd, short revent, void *args){}
 
 int main(int argc, char const *argv[])
 {
@@ -963,8 +972,7 @@ int main(int argc, char const *argv[])
 
     lc.base = base; 
 
-    int sockfd = mc_socket();
-
+    mc_base_dispose(base);
 
 
     return 0;
