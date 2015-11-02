@@ -118,315 +118,7 @@ int mc_event_post(mc_event_t *ev, mc_event_base_t *base);
 /* 事件路由, 反应开始循环, 等待事伯的发生 */
 int mc_dispatch(mc_event_base_t *base);
 /* 释放反应堆 */
-void mc_base_dispose(mc_event_base_t * base);
-
-//将事件加入队列
-static void add_event_to_queue(mc_event_t *ev, void * queue);
-//将事件从队列删除
-static void del_event_from_queue(mc_event_t *ev);
-//事件队列dequeue
-static mc_event_t * get_event_and_del(void * queue);
-//清空队列
-static void destroy_queue_events(void * queue);
-static void destroy_queue_events_safe(void *queue);
-//打印事件列表
-static void log_printf_events(void * queue);
-
-/* 为事件封装的操作 */
-typedef struct mc_event_opt_
-{
-    void * (*init)(mc_event_base_t *);                              //初始化
-    int    (*add)(void *, mc_event_t *);                            //加入队列
-    int    (*del)(void *, mc_event_t *);                            //删除事件
-    int    (*mod)(void *, mc_event_t *);                            //修改事件
-    int    (*dispatch)(void *, mc_event_base_t *, struct timeval);  //循环监听事件
-} mc_event_opt;
-
-static void * mc_epoll_init(mc_event_base_t *meb);
-static int mc_epoll_add(void *arg, mc_event_t *ev);
-static int mc_epoll_del(void *arg, mc_event_t *ev);
-static int mc_epoll_mod(void *arg, mc_event_t *ev);
-static int mc_epoll_loop(void *arg, mc_event_base_t *meb, struct timeval ev_timeval);
-
-mc_event_opt mc_event_op_val = {
-    mc_epoll_init,
-    mc_epoll_add,
-    mc_epoll_del,
-    mc_epoll_mod,
-    mc_epoll_loop
-};
-
-#define mc_event_init    mc_event_op_val.init;
-#define mc_event_add     mc_event_op_val.add;
-#define mc_event_del     mc_event_op_val.del;
-#define mc_event_mod     mc_event_op_val.mod;
-#define mc_event_loop    mc_event_op_val.dispatch;
-
-
-#define DEFAULT_PORT        12345
-#define DEFAULT_BACKLOG     200
-
-/* vector的定义 */
-struct vec
-{
-    int         len;
-    const void  *ptr;
-};
-
-/* HTTP URL */
-struct url
-{
-    struct vec  proto;
-    struct vec  user;
-    struct vec  pass;
-    struct vec  host;
-    struct vec  port;
-    struct vec  uri;
-};
-
-/* HTTP 报头 */
-struct hthdr
-{
-    struct vec name;
-    struct vec value;
-};
-
-/* HTTP information */
-struct hti
-{
-    struct vec      method;
-    struct vec      url;
-    struct hthdr    hh[64];     /* 报头*/
-    int             nhdrs;
-    int             reqlen;
-    int             totlen;
-};
-
-struct sa
-{
-    socklen_t len;
-    union {
-        struct sockaddr     sa;
-        struct sockaddr_in  sin;
-    } u;
-
-/* WITH_IPV6 */
-#ifdef WITH_IPV6
-    struct sockaddr_in6     sin6;
-#endif 
-};
-
-struct iobuf
-{
-    mc_event_t  read;
-    mc_event_t  write;
-    char        buf[16 * 1024];
-    int         nread;
-    int         nwritten;
-};
-
-/*
- * 定义一个connection结构, 用于表示每一个到来的连接
- */
-typedef struct connection_
-{
-    int                 fd;         //注册在反应堆的fd
-    struct sa           sa;
-    struct iobuf        remote;
-    struct hti          hti;
-    struct vec          uri;
-    struct vec          req;
-    struct vec          auth;
-    struct vec          cookie;
-    struct vec          clength;
-    struct vec          ctype;
-    struct vec          status;
-    struct vec          location;
-    time_t              ims;
-    time_t              expire;
-    char                user[32];
-    int                 ntotal;
-    int                 nexpected;
-
-    char                gotrequest;
-    char                gotreply;
-    char                cgimode;
-    char                sslaccepted;
-
-    mc_event_base_t     *base;      //指向反应堆的指针
-
-} mc_connection;
-
-#define __QUOTE(x)      # x
-#define  _QUOTE(x)      __QUOTE(x)
-
-#define LOG_OUTPUT(std, fmt, ...) do {                                                  \
-            time_t t = time(NULL);                                                      \
-            struct tm *dm = localtime(&t);                                              \
-                                                                                        \
-            fprintf(std, "[%02d:%02d:%02d] %s:[" _QUOTE(__LINE__) "]\t       %-26s:"    \
-                    fmt "\n", dm->tm_hour, dm->tm_min, dm->tm_sec, __FILE__, __func__,  \
-                    ## __VA_ARGS__);                                                    \
-            fflush(stdout);                                                             \
-} while(0)
-
-#ifdef _DEBUG
-#define LOG_DEBUG(fmt, ...) LOG_OUTPUT(stdout, fmt, ## __VA_ARGS__)
-#endif
-
-#define LOG_ERROR(fmt, ...) LOG_OUTPUT(stderr, fmt, ## __VA_ARGS__)
-
-static int blockmode(int fd, int block);
-static int mc_listen(uint16_t listenfd);
-static void handler_accept(int fd, short revent, void *args);
-static void handler_read(int fd, short revent, void *args);
-static void hnadler_write(int fd, short revent, void *args);
-static void cab(int fd, short revent, void *args);
-
-static int blockmode(int fd, int block)
-{
-    int flags, retval = 0; 
-
-    if ((flags = fcntl(fd, F_GETFL, 0)) == -1)
-    {
-        LOG_ERROR("nonblock: fcntl(%d, F_GETFL): %s", fd, strerror(ERRNO));
-        retval--;
-    }
-    else
-    {
-        if (block)
-            flags &= ~O_NONBLOCK;
-        else
-            flags |= O_NONBLOCK;
-
-        //Apply the mode
-        if (fcntl(fd, F_SETFL, flags) != 0)
-        {
-            LOG_ERROR("nonblock: fcntl(%d, F_SETFL): %s", fd, strerror(ERRNO));
-            retval--;
-        }
-    }
-
-    return (retval);
-}
-
-static int mc_listen(uint16_t port)
-{
-    int sock, on = 1, af;
-    struct sa sa;
-
-#ifdef WITH_IPV6
-    af = PF_INET6;
-#else
-    af = PF_INET;
-#endif
-
-    if ((sock = socket(af, SOCK_STREAM, 6)) == -1)
-    {
-        LOG_ERROR("Listen: socket: %s", strerror(ERRNO));
-        return -1;
-    }
-
-    blockmode(sock, 0);
-    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *) &on, sizeof(on));
-
-#ifdef WITH_IPV6
-    sa.u.sin6.sin6_family = af;
-    sa.u.sin6.sin6_port = htons(port);
-    sa.u.sin6.sin6_addr = in6addr_any;
-    sa.len = sizeof(sa.u.sin6);
-#else
-    sa.u.sin_family = af;
-    sa.u.sin_port = htons(port);
-    sa.u.sin_addr.s_addr = INADDR_ANY;
-    sa.len = sizeof(sa.u.sin);
-#endif
-
-    if (bind(sock, &sa.u.sa, sa.len) < 0)
-    {
-        LOG_ERROR("Listen: af %d bind(%d):%s", af, port, strerror(ERRNO));
-        return -1;
-    }
-
-    (void) listen(sock, 16);
-
-    return (sock);
-}
-
-int main(int argc, char const *argv[])
-{
-    /*mc_event_t mev;
-    mc_event_base_t *base = mc_base_new();
-    mc_connection lc;
-
-    int sockfd = mc_socket();
-    mc_bind(sockfd);
-    mc_listen(sockfd);
-
-    mc_event_set(&(lc.read), MC_EV_READ, sockfd, handler_accept, &lc);
-    mc_event_post(&(lc.read), base);
-    mc_dispatch(base);*/
-
-    /*LL_HEAD(queue);
-
-    int i;
-    for (i = 0; i < 100; i++) {
-        struct vec *v = malloc(sizeof(struct vec));
-        memset(v, 0, sizeof(struct vec));
-        v->ptr = "demo";
-        v->len = i;
-        LL_ADD(&queue, &v->link);
-    }
-
-    struct llhead *lptr;
-    struct vec *tmp; 
-    LL_FOREACH(&queue, lptr) {
-        tmp = LL_ENTRY(lptr, struct vec, link);
-        LOG_DEBUG("%d, %d", tmp->ptr, tmp->len);
-    }*/
-
-    /*mc_event_base_t * base = mc_base_new();
-
-    int i;
-    for (i = 0; i < 10; i++) {
-        mc_event_t * ev = malloc(sizeof(mc_event_t));
-
-        ev->ev_fd = i;
-
-        add_event_to_queue(ev, base->added_list);
-    }
-
-    log_printf_events(base->added_list);
-
-
-    mc_base_dispose(base);*/
-
-
-    /*log_printf_events((void*)base->added_list);
-
-    printf ("\n");
-    get_event_and_del((void*)base->added_list);
-    get_event_and_del((void*)base->added_list);
-    printf ("\n");*/
-
-    // log_printf_events(base->added_list);
-
-    // destroy_queue_events_safe(base->added_list);
-    // destroy_queue_events_safe(base->added_list);
-    //destroy_queue_events(base->added_list);
-    //destroy_queue_events(base->added_list);
-
-    mc_connection lc;
-    mc_event_base_t * base = mc_base_new();
-
-    lc.base = base; 
-
-    int sockfd = mc_socket();
-
-
-
-    return 0;
-}
+void mc_base_dispose(mc_event_base_t * base); 
 
 mc_event_base_t * mc_base_new(void)
 {
@@ -498,18 +190,12 @@ int mc_event_set(mc_event_t *ev, short revent, int fd, mc_ev_callback callback, 
     LL_INIT(&ev->link);
 
     if (args == NULL)
-    {
         ev->args = NULL;
-    }
     else
-    {
         ev->args = args;
-    }
 
     if (ev->base == NULL)
-    {
         return 0;
-    }
 
 #if (HAVE_EPOLL)
     if (revent & MC_EV_READ)
@@ -521,9 +207,7 @@ int mc_event_set(mc_event_t *ev, short revent, int fd, mc_ev_callback callback, 
         mc_event_mod((void*)&epoll_flag, ev);
 
         if (err != 0)
-        {
             LOG_ERROR("mc_event_mod (MC_EVENT_READ ) in mc_event_set");
-        }
     }
 
     if (revent & MC_EV_WRITE)
@@ -533,9 +217,7 @@ int mc_event_set(mc_event_t *ev, short revent, int fd, mc_ev_callback callback, 
         err = mc_event_mod((void*)&epoll_flag, ev);
 
         if (err != 0)
-        {
             LOG_ERROR("mc_event_mod (MC_EVENT_WRITE) in mc_event_set");
-        }
 
         ev->ev_flags |= MC_EV_INITD;
     }
@@ -674,6 +356,15 @@ int mc_dispatch(mc_event_base_t * base)
         return -1;
 }
 
+/***************************************************************************************************/
+
+static void add_event_to_queue(mc_event_t *ev, void * queue);   //将事件加入队列
+static void del_event_from_queue(mc_event_t *ev);               //将事件从队列删除
+static mc_event_t * get_event_and_del(void * queue);            //事件dequeue
+static void destroy_queue_events(void * queue);                 //清空队列
+static void destroy_queue_events_safe(void *queue);             //安全删除队列事件
+static void log_printf_events(void * queue);                    //打印队件事件
+
 static void add_event_to_queue(mc_event_t *ev, void * queue)
 {
     struct llhead * head = (struct llhead *) queue;
@@ -684,13 +375,9 @@ static void add_event_to_queue(mc_event_t *ev, void * queue)
 static void del_event_from_queue(mc_event_t *ev)
 {
     if (ev != NULL)
-    {
         LL_DEL(&ev->link);
-    }
     else
-    {
         LOG_ERROR("event *ev == NULL");
-    }
 }
 
 static mc_event_t * get_event_and_del(void * queue)
@@ -708,9 +395,7 @@ static mc_event_t * get_event_and_del(void * queue)
     ev = LL_ENTRY(ptr, mc_event_t, link);
 
     if (ev == NULL)
-    {
         return NULL;
-    }
 
     LL_DEL(&ev->link);
 
@@ -735,9 +420,7 @@ static void destroy_queue_events(void * queue)
         LOG_DEBUG("del event [ev_fd=%d]", ev->ev_fd);
 
         if (ev != NULL)
-        {
             free(ev);
-        }
     }
 
     LL_INIT(head);
@@ -761,9 +444,7 @@ static void destroy_queue_events_safe(void *queue)
         LOG_DEBUG("del event [ev_fd=%d]", ev->ev_fd);
 
         if (ev != NULL)
-        {
             free(ev);
-        }
     }
 
     LL_INIT(head);
@@ -786,6 +467,38 @@ static void log_printf_events(void * queue)
         LOG_DEBUG("event:[ev_fd=%d] [revent=%x]", ev->ev_fd, ev->revent);
     }
 }
+
+/***************************************************************************************************/
+
+/* 为事件封装的操作 */
+typedef struct mc_event_opt_
+{
+    void * (*init)(mc_event_base_t *);                              //初始化
+    int    (*add)(void *, mc_event_t *);                            //加入队列
+    int    (*del)(void *, mc_event_t *);                            //删除事件
+    int    (*mod)(void *, mc_event_t *);                            //修改事件
+    int    (*dispatch)(void *, mc_event_base_t *, struct timeval);  //循环监听事件
+} mc_event_opt;
+
+static void * mc_epoll_init(mc_event_base_t *meb);
+static int mc_epoll_add(void *arg, mc_event_t *ev);
+static int mc_epoll_del(void *arg, mc_event_t *ev);
+static int mc_epoll_mod(void *arg, mc_event_t *ev);
+static int mc_epoll_loop(void *arg, mc_event_base_t *meb, struct timeval ev_timeval);
+
+mc_event_opt mc_event_op_val = {
+    mc_epoll_init,
+    mc_epoll_add,
+    mc_epoll_del,
+    mc_epoll_mod,
+    mc_epoll_loop
+};
+
+#define mc_event_init    mc_event_op_val.init;
+#define mc_event_add     mc_event_op_val.add;
+#define mc_event_del     mc_event_op_val.del;
+#define mc_event_mod     mc_event_op_val.mod;
+#define mc_event_loop    mc_event_op_val.dispatch;
 
 static void *mc_epoll_init(mc_event_base_t * base)
 {
@@ -922,4 +635,337 @@ static int mc_epoll_loop(void *arg, mc_event_base_t *base, struct timeval ev_tim
     }
 
     return nfds;
+}
+
+#define DEFAULT_PORT        12345
+#define DEFAULT_BACKLOG     200
+
+/* vector的定义 */
+struct vec
+{
+    int         len;
+    const void  *ptr;
+};
+
+/* HTTP URL */
+struct url
+{
+    struct vec  proto;
+    struct vec  user;
+    struct vec  pass;
+    struct vec  host;
+    struct vec  port;
+    struct vec  uri;
+};
+
+/* HTTP 报头 */
+struct hthdr
+{
+    struct vec name;
+    struct vec value;
+};
+
+/* HTTP information */
+struct hti
+{
+    struct vec      method;
+    struct vec      url;
+    struct hthdr    hh[64];     /* 报头*/
+    int             nhdrs;
+    int             reqlen;
+    int             totlen;
+};
+
+struct sa
+{
+    socklen_t len;
+    union {
+        struct sockaddr     sa;
+        struct sockaddr_in  sin;
+    } u;
+
+/* WITH_IPV6 */
+#ifdef WITH_IPV6
+    struct sockaddr_in6     sin6;
+#endif 
+};
+
+struct iobuf
+{
+    mc_event_t  read;
+    mc_event_t  write;
+    char        buf[16 * 1024];
+    int         nread;
+    int         nwritten;
+};
+
+/*
+ * 定义一个connection结构, 用于表示每一个到来的连接
+ */
+typedef struct connection_
+{
+    int                 fd;         //注册在反应堆的fd
+    struct sa           sa;
+    struct iobuf        remote;
+    struct hti          hti;
+    struct vec          uri;
+    struct vec          req;
+    struct vec          auth;
+    struct vec          cookie;
+    struct vec          clength;
+    struct vec          ctype;
+    struct vec          status;
+    struct vec          location;
+    time_t              ims;
+    time_t              expire;
+    char                user[32];
+    int                 ntotal;
+    int                 nexpected;
+
+    char                gotrequest;
+    char                gotreply;
+    char                cgimode;
+    char                sslaccepted;
+
+    mc_event_base_t     *base;      //指向反应堆的指针
+
+} mc_connection;
+
+#define __QUOTE(x)      # x
+#define  _QUOTE(x)      __QUOTE(x)
+
+#define LOG_OUTPUT(std, fmt, ...) do {                                                  \
+            time_t t = time(NULL);                                                      \
+            struct tm *dm = localtime(&t);                                              \
+                                                                                        \
+            fprintf(std, "[%02d:%02d:%02d] %s:[" _QUOTE(__LINE__) "]\t       %-26s:"    \
+                    fmt "\n", dm->tm_hour, dm->tm_min, dm->tm_sec, __FILE__, __func__,  \
+                    ## __VA_ARGS__);                                                    \
+            fflush(stdout);                                                             \
+} while(0)
+
+#ifdef _DEBUG
+#define LOG_DEBUG(fmt, ...) LOG_OUTPUT(stdout, fmt, ## __VA_ARGS__)
+#endif
+
+#define LOG_ERROR(fmt, ...) LOG_OUTPUT(stderr, fmt, ## __VA_ARGS__)
+
+static int blockmode(int fd, int block);
+static int mc_listen(uint16_t listenfd);
+static void mc_accept(int lsn);
+static void mc_handler_accept(int fd, short revent, void *args);
+static void mc_handler_read(int fd, short revent, void *args);
+static void mc_handler_write(int fd, short revent, void *args);
+static void cab(int fd, short revent, void *args);
+
+static int blockmode(int fd, int block)
+{
+    int flags, retval = 0; 
+
+    if ((flags = fcntl(fd, F_GETFL, 0)) == -1)
+    {
+        LOG_ERROR("nonblock: fcntl(%d, F_GETFL): %s", fd, strerror(ERRNO));
+        retval--;
+    }
+    else
+    {
+        if (block)
+            flags &= ~O_NONBLOCK;
+        else
+            flags |= O_NONBLOCK;
+
+        //Apply the mode
+        if (fcntl(fd, F_SETFL, flags) != 0)
+        {
+            LOG_ERROR("nonblock: fcntl(%d, F_SETFL): %s", fd, strerror(ERRNO));
+            retval--;
+        }
+    }
+
+    return (retval);
+}
+
+static int mc_listen(uint16_t port)
+{
+    int sock, on = 1, af;
+    struct sa sa;
+
+#ifdef WITH_IPV6
+    af = PF_INET6;
+#else
+    af = PF_INET;
+#endif
+
+    if ((sock = socket(af, SOCK_STREAM, 6)) == -1)
+    {
+        LOG_ERROR("Listen: socket: %s", strerror(ERRNO));
+        return -1;
+    }
+
+    blockmode(sock, 0);
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *) &on, sizeof(on));
+
+#ifdef WITH_IPV6
+    sa.u.sin6.sin6_family = af;
+    sa.u.sin6.sin6_port = htons(port);
+    sa.u.sin6.sin6_addr = in6addr_any;
+    sa.len = sizeof(sa.u.sin6);
+#else
+    sa.u.sin_family = af;
+    sa.u.sin_port = htons(port);
+    sa.u.sin_addr.s_addr = INADDR_ANY;
+    sa.len = sizeof(sa.u.sin);
+#endif
+
+    if (bind(sock, &sa.u.sa, sa.len) < 0)
+    {
+        LOG_ERROR("Listen: af %d bind(%d):%s", af, port, strerror(ERRNO));
+        return -1;
+    }
+
+    (void) listen(sock, 16);
+
+    return (sock);
+}
+
+static void mc_accept(int lsn)
+{
+    struct connection_ *c;
+    struct sa sa;
+    int sock;
+
+    sa.len = sizeof(sa.u.sin);
+
+    if ((sock = accept(lsn, &sa.u.sa, &sa.len)) == -1)
+    {
+        LOG_ERROR("accept %s", strerror(ERRNO));
+    }
+    else if (blockmode(sock, 0) != 0)
+    {
+        LOG_ERROR("blockmode: %s", strerror(ERRNO));
+        (void) close(sock);
+    }
+    else if ((c = calloc(1, sizeof(*c))) == NULL)
+    {
+        (void) close(sock);
+        LOG_ERROR("calloc:%s", strerror(ERRNO));
+    }
+    else
+    {
+        LOG_DEBUG("new client connected [fd=%d].", sock);
+    }
+}
+
+static void mc_handler_accept(int fd, short revent, void *args)
+{
+    struct sockaddr_in in_addr; 
+    size_t len;
+    int s, done = 0;
+    mc_connection * lc = (struct connection_ *) args;
+
+    len = sizeof(in_addr);
+    
+    while (!done) 
+    {
+        s = accept(fd, (struct sockaddr *) &in_addr, &len);
+
+        if (s == -1)
+        {
+            if ((errno == EAGAIN) || (errno == EWOULDBLOCK))
+                break;
+            else
+            {
+                LOG_ERROR("accept() error!");
+                break;
+            }
+        }
+
+        if (s == 0)
+            LOG_ERROR("accept a connectionon %d", fd);
+
+        done = 1;
+    }
+
+    blockmode(s, 0);
+
+    lc->fd = s;
+    mc_event_set(&(lc->remote->read), MC_EV_READ, lc->fd, mc_handler_read, lc);
+    mc_event_set(&(lc->remote->write), MC_EV_WRITE, lc->fd, mc_handler_write, lc);
+
+    mc_event_post(&(lc->remote->write, lc->base));
+}
+
+int main(int argc, char const *argv[])
+{
+    /*mc_event_t mev;
+    mc_event_base_t *base = mc_base_new();
+    mc_connection lc;
+
+    int sockfd = mc_socket();
+    mc_bind(sockfd);
+    mc_listen(sockfd);
+
+    mc_event_set(&(lc.read), MC_EV_READ, sockfd, handler_accept, &lc);
+    mc_event_post(&(lc.read), base);
+    mc_dispatch(base);*/
+
+    /*LL_HEAD(queue);
+
+    int i;
+    for (i = 0; i < 100; i++) {
+        struct vec *v = malloc(sizeof(struct vec));
+        memset(v, 0, sizeof(struct vec));
+        v->ptr = "demo";
+        v->len = i;
+        LL_ADD(&queue, &v->link);
+    }
+
+    struct llhead *lptr;
+    struct vec *tmp; 
+    LL_FOREACH(&queue, lptr) {
+        tmp = LL_ENTRY(lptr, struct vec, link);
+        LOG_DEBUG("%d, %d", tmp->ptr, tmp->len);
+    }*/
+
+    /*mc_event_base_t * base = mc_base_new();
+
+    int i;
+    for (i = 0; i < 10; i++) {
+        mc_event_t * ev = malloc(sizeof(mc_event_t));
+
+        ev->ev_fd = i;
+
+        add_event_to_queue(ev, base->added_list);
+    }
+
+    log_printf_events(base->added_list);
+
+
+    mc_base_dispose(base);*/
+
+
+    /*log_printf_events((void*)base->added_list);
+
+    printf ("\n");
+    get_event_and_del((void*)base->added_list);
+    get_event_and_del((void*)base->added_list);
+    printf ("\n");*/
+
+    // log_printf_events(base->added_list);
+
+    // destroy_queue_events_safe(base->added_list);
+    // destroy_queue_events_safe(base->added_list);
+    //destroy_queue_events(base->added_list);
+    //destroy_queue_events(base->added_list);
+
+    mc_connection lc;
+    mc_event_base_t * base = mc_base_new();
+
+    lc.base = base; 
+
+    int sockfd = mc_socket();
+
+
+
+    return 0;
 }
