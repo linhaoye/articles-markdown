@@ -505,8 +505,6 @@ int mc_event_set(mc_event_t *ev, short revent, int fd, mc_ev_callback callback, 
 
         err = mc_event_mod((void*)&epoll_flag, ev);
 
-        mc_event_mod((void*)&epoll_flag, ev);
-
         if (err != 0)
             LOG_ERROR("mc_event_mod (MC_EVENT_READ ) in mc_event_set");
     }
@@ -809,7 +807,7 @@ static int mc_listen(uint16_t port)
         return -1;
     }
 
-    blockmode(sock, 0);
+    //blockmode(sock, 0);
     setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *) &on, sizeof(on));
 
 #ifdef WITH_IPV6
@@ -830,7 +828,13 @@ static int mc_listen(uint16_t port)
         return -1;
     }
 
-    (void) listen(sock, 16);
+    if (listen(sock, 16) < 0)
+    {
+        LOG_ERROR("Listen: list() error(%d):%s", sock, strerror(errno));
+        return -1;
+    }
+    else
+        LOG_DEBUG("server running in port(%d)", port);
 
     return (sock);
 }
@@ -860,6 +864,8 @@ static void mc_accept(int lsn)
     else
     {
         LOG_DEBUG("new client connected [fd=%d].", sock);
+
+        free(c);
     }
 }
 
@@ -895,14 +901,72 @@ static void mc_handler_accept(int fd, short revent, void *args)
 
     blockmode(s, 0);
     lc->fd = s;
-    
+
     mc_event_set(&(lc->remote.read), MC_EV_READ, lc->fd, mc_handler_read, lc);
     mc_event_set(&(lc->remote.write), MC_EV_WRITE, lc->fd, mc_handler_write, lc);
     mc_event_post(&(lc->remote.write), lc->base);
 }
 
-static void mc_handler_read(int fd, short revent, void *args){}
-static void mc_handler_write(int fd, short revent, void *args){}
+static void mc_handler_read(int fd, short revent, void *args)
+{
+    int len;
+    struct connection_ * lc = (struct connection_ *) args;
+
+    blockmode(fd, 0);
+
+    len = recv(fd, lc->remote.buf, sizeof(lc->remote.buf, 0), 0);
+
+    if (len > 0)
+    {
+        lc->remote.nread = len;
+        lc->remote.buf[len] = '\0';
+
+        LOG_DEBUG("recv [fd=%d], data:[%s], total: [%d] bytes!", fd, len, lc->remote.buf);
+        //重置事件
+        mc_event_set(&(lc->remote.write), MC_EV_WRITE, lc->fd, mc_handler_write, lc);
+    }
+    else if (len == 0)
+    {
+        close(fd);
+        LOG_DEBUG("client [fd=%d],close gracefully!", fd);
+    }
+    else
+    {
+        close(fd);
+        LOG_DEBUG("recv client [fd=%d] data error, %s", fd, strerror(errno));
+    }
+
+}
+
+static void mc_handler_write(int fd, short revent, void *args)
+{
+    int len;
+    struct connection_ * lc = (struct connection_ *) args;
+
+    blockmode(fd, 0);
+
+    len = send(fd, lc->remote.buf, sizeof(lc->remote.buf), 0);
+
+    if (len > 0)
+    {
+        lc->remote.nwritten = len;
+
+        LOG_DEBUG("send [fd=%d], data:[%s], total: [%d] bytes!");
+        mc_event_set(&(lc->remote.read), MC_EV_READ, lc->fd, mc_handler_read, lc);
+    }
+    else
+    {
+        close(lc->fd);
+        LOG_DEBUG("send client [fd=%d] data error, %s", fd, strerror(errno));
+    }
+}
+
+static void cab(int fd, short revent, void *args)
+{
+    blockmode(fd, 0);
+    char buf[16 * 1024] = "xx00xx00xx00xx00\n";
+    send(fd, buf, sizeof(buf), 0);
+}
 
 int main(int argc, char const *argv[])
 {
@@ -967,13 +1031,27 @@ int main(int argc, char const *argv[])
     //destroy_queue_events(base->added_list);
     //destroy_queue_events(base->added_list);
 
+
+
+    /*int quit = 0, listfd = mc_listen(12345);
+
+    while (!quit)
+    {
+        mc_accept(listfd);
+    }*/
+
     mc_connection lc;
     mc_event_base_t * base = mc_base_new();
 
     lc.base = base; 
 
-    mc_base_dispose(base);
+    int listenfd = mc_listen(12345);
 
+    mc_event_set(&(lc.remote.read), MC_EV_READ, listenfd, mc_handler_accept, &lc);
+    mc_event_post(&(lc.remote.read), base);
+
+    mc_dispatch(base);
+    // mc_base_dispose(base);
 
     return 0;
 }
