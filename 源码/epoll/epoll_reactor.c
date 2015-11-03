@@ -145,7 +145,7 @@ static int mc_epoll_del(void *arg, mc_event_t *ev);
 static int mc_epoll_mod(void *arg, mc_event_t *ev);
 static int mc_epoll_loop(void *arg, mc_event_base_t *meb, struct timeval ev_timeval);
 
-mc_event_opt mc_event_op_val = {
+struct mc_event_opt_ mc_event_op_val = {
     mc_epoll_init,
     mc_epoll_add,
     mc_epoll_del,
@@ -169,6 +169,11 @@ static void *mc_epoll_init(mc_event_base_t * base)
 
     base->epoll_fd = epoll_create(MC_EVENT_MAX);
 
+    if (base->epoll_fd == -1)
+        LOG_ERROR("epoll_create() error:%s", strerror(errno));
+    else
+        LOG_DEBUG("init reactor base success!");
+
     return base;
 }
 
@@ -180,13 +185,15 @@ static int mc_epoll_add(void *arg, mc_event_t *ev)
         return -1;
     }
 
-    mc_event_base_t *base = ev->base;
+    mc_event_base_t * base = ev->base;
 
     int err, epoll_fd = base->epoll_fd;
     struct epoll_event epoll_ev;
 
     epoll_ev.data.ptr = ev;
     epoll_ev.events = EPOLLIN | EPOLLET;
+
+    LOG_DEBUG("ev_flags[%x], [%x]", ev->ev_flags, !(ev->ev_flags & MC_EV_ADDED));
 
     if (!(ev->ev_flags & MC_EV_ADDED))
     {
@@ -198,6 +205,9 @@ static int mc_epoll_add(void *arg, mc_event_t *ev)
             return -1;
         }
         ev->ev_flags |= MC_EV_ADDED;
+
+        LOG_DEBUG("epoll_ctl() event add to epoll_fd ok [fd=%d], [event=%d]",
+            ev->ev_fd, ev->revent);
     }
     return 0;
 }
@@ -211,7 +221,6 @@ static int mc_epoll_del(void * arg, mc_event_t *ev)
     }
 
     mc_event_base_t *base = ev->base ;
-
     int err, epoll_fd = base->epoll_fd ;
 
     if( !(ev->ev_flags & MC_EV_INITD) )
@@ -273,7 +282,7 @@ static int mc_epoll_loop(void *arg, mc_event_base_t *base, struct timeval ev_tim
 {
     if (base == NULL)
     {
-        LOG_ERROR("base == NULL");
+        LOG_ERROR("reactor base is null");
         return -1;
     }
 
@@ -286,12 +295,15 @@ static int mc_epoll_loop(void *arg, mc_event_base_t *base, struct timeval ev_tim
     int nfds;
 
     struct epoll_event *nevents = (struct epoll_event *) arg;
-    nfds = epoll_wait(base->epoll_fd, nevents, MC_EVENT_MAX, 1);
+    nfds = epoll_wait(base->epoll_fd, nevents, MC_EVENT_MAX, -1);
 
     if (nfds <= -1)
     {
         LOG_ERROR("epoll_wait() error!");
+        return -1;
     }
+
+    LOG_DEBUG("epoll_wait() occur events [howmany=%d]", nfds);
 
     return nfds;
 }
@@ -308,7 +320,6 @@ static void log_printf_events(void * queue);                    //打印队件�
 static void add_event_to_queue(mc_event_t *ev, void * queue)
 {
     struct llhead * head = (struct llhead *) queue;
-
     LL_TAIL(head, &ev->link);
 }
 
@@ -445,7 +456,8 @@ mc_event_base_t * mc_base_new(void)
 
     gettimeofday(&base->event_time, NULL);
 
-    mc_event_init(base);
+    // mc_event_init(base);
+    mc_epoll_init(base);
 
     return base;
 }
@@ -496,30 +508,37 @@ int mc_event_set(mc_event_t *ev, short revent, int fd, mc_ev_callback callback, 
         ev->args = args;
 
     if (ev->base == NULL)
+    {
+        LOG_DEBUG("event initialize ok [fd=%d],[event=%x]", ev->ev_fd, ev->revent);
         return 0;
+    }
 
 #if (HAVE_EPOLL)
     if (revent & MC_EV_READ)
     {
         epoll_flag = EPOLLIN | EPOLLET;
 
-        err = mc_event_mod((void*)&epoll_flag, ev);
+        err = mc_epoll_mod((void*)&epoll_flag, ev);
 
         if (err != 0)
-            LOG_ERROR("mc_event_mod (MC_EVENT_READ ) in mc_event_set");
+            LOG_ERROR("reset fd event fail [fd=%d], [event=%x]", ev->ev_fd, ev->revent);
+        else
+            LOG_DEBUG("reset fd event ok [fd=%d], [event=%x]", ev->ev_fd, ev->revent);
     }
 
     if (revent & MC_EV_WRITE)
     {
         epoll_flag = EPOLLOUT | EPOLLET;
 
-        err = mc_event_mod((void*)&epoll_flag, ev);
+        err = mc_epoll_mod((void*)&epoll_flag, ev);
 
         if (err != 0)
-            LOG_ERROR("mc_event_mod (MC_EVENT_WRITE) in mc_event_set");
-
-        ev->ev_flags |= MC_EV_INITD;
+            LOG_ERROR("reset fd event fail [fd=%d], [event=%x]", ev->ev_fd, ev->revent);
+        else
+            LOG_DEBUG("reset fd event ok [fd=%d], [event=%x]", ev->ev_fd, ev->revent);
     }
+
+    ev->ev_flags |= MC_EV_INITD;
 
 #endif
 
@@ -537,6 +556,7 @@ int mc_event_post(mc_event_t *ev, mc_event_base_t * base)
     if (base->magic != MC_BASE_MAGIC)
     {
         LOG_ERROR("The mc_event_base_t * points base non inited");
+        return -1;
     }
 
     int err;
@@ -544,13 +564,17 @@ int mc_event_post(mc_event_t *ev, mc_event_base_t * base)
     add_event_to_queue(ev, base->added_list);
     base->event_num++;
 
-    err = mc_event_add(NULL, ev);
+    // err = mc_event_add(NULL, ev);
+    err = mc_epoll_add(NULL, ev);
 
     if (err == -1)
     {
-        LOG_ERROR(" mc_event_add error");
+        LOG_ERROR("event add to epoll_fd fail [fd=%d], [event=%x]", ev->ev_fd, ev->revent);
         return -1;
     }
+
+    LOG_DEBUG("event post to base ok [fd=%d], [event=%x], [event_num=%d]",
+        ev->ev_fd, ev->revent, base->event_num);
 
     return 0;
 }
@@ -559,33 +583,34 @@ int mc_dispatch(mc_event_base_t * base)
 {
     if (base == NULL)
     {
-        LOG_ERROR("base == NULL");
+        LOG_ERROR("reactor base is null!");
         return -1;
     }
 
     if (base->magic != MC_BASE_MAGIC)
     {
-        LOG_ERROR(" reactor base noinitlized");
+        LOG_ERROR("reactor base noinitlized!");
         return -1;
     }
 
-    struct epoll_event *nevents = (struct epoll_event*)malloc(sizeof(struct epoll_event) * MC_EVENT_MAX);
+    struct epoll_event * nevents = (struct epoll_event*)malloc(sizeof(struct epoll_event) * MC_EVENT_MAX);
 
     int  i,nevent, done = 0;
     mc_event_t *levent, *retevent;
 
     while (!done)
     {
-         nevent = mc_event_loop(nevents, base, base->event_time);
+         // nevent = mc_event_loop(nevents, base, base->event_time);
+         nevent = mc_epoll_loop(nevents, base, base->event_time);
 
          if (nevent == -1)
          {
-            LOG_ERROR("No event check!");
+            LOG_ERROR("no event check!");
             goto err1;
          }
 
-         for (i = 0; i < nevent; i++)
-         {
+        for (i = 0; i < nevent; i++)
+        {
             if (nevents[i].events & EPOLLERR || nevents[i].events & EPOLLHUP)
             {
                 levent = nevents[i].data.ptr;
@@ -623,15 +648,14 @@ int mc_dispatch(mc_event_base_t * base)
             }
             else
             {
-                LOG_ERROR("Unkown err!");
+                LOG_ERROR("unkown error:%s", strerror(errno));
                 goto err1;
             }
-
         }
 
         for (i = 0; i < nevent; i++)
         {
-            if (base->active_list->next == base->active_list->prev)
+            if (base->active_list == base->active_list->next)
             {
                 LOG_ERROR("the queue is empty now!");
                 break;
@@ -642,7 +666,7 @@ int mc_dispatch(mc_event_base_t * base)
 
             if (retevent == NULL)
             {
-                LOG_ERROR("event is NULL file!");
+                LOG_ERROR("event is null file!");
                 continue;
             }
 
@@ -893,8 +917,7 @@ static void mc_handler_accept(int fd, short revent, void *args)
             }
         }
 
-        if (s == 0)
-            LOG_ERROR("accept a connectionon %d", fd);
+        LOG_DEBUG("accept a new cilent connection [fd=%d]", s);
 
         done = 1;
     }
@@ -1045,7 +1068,7 @@ int main(int argc, char const *argv[])
 
     lc.base = base; 
 
-    int listenfd = mc_listen(12345);
+    int listenfd = mc_listen(DEFAULT_PORT);
 
     mc_event_set(&(lc.remote.read), MC_EV_READ, listenfd, mc_handler_accept, &lc);
     mc_event_post(&(lc.remote.read), base);
