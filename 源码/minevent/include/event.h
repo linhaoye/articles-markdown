@@ -1,0 +1,64 @@
+#ifndef _MIN_EVENT_H_
+#define _MIN_EVENT_H_
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define EVENT_READ		0x01
+#define EVENT_WRITE		0x02
+#define EVENT_TIMEOUT	0x04
+#define EVENT_SIGNAL	0x08
+#define EVENT_PERSIST	0x10
+
+#define EVLIST_INIT		0x01
+#define EVLIST_INSERTED	0x02
+#define EVLIST_TIMEOUT	0x04
+#define EVLIST_SIGNAL	0x08
+#define EVLIST_ACTIVE	0x10
+
+#define EVLIST_ALL		0x1F
+
+struct event {
+	TAILQ_ENTRY(event) ev_next;
+	TAILQ_ENTRY(event) ev_active_next;
+	RB_ENTRY(event) ev_timeout_node;
+
+	struct event_base *ev_base;
+
+	int ev_fd;
+	short ev_events;	//Event类型
+
+	void (*ev_callback)(int, short, void *arg); //事件处理回调函数
+
+	struct timeval ev_timeout;
+
+	int ev_flags;	//Event当前的状态
+	int ev_res;
+	int ev_pri;		//优先级
+	void *ev_arg;
+};
+
+struct eventop {
+	const char *name;
+	void* (*init)(void);
+	int (*add)(void*, struct event*);
+	int (*del)(void*, struct event*);
+	int (*recalc)(struct event_base*, void*, int);
+	int (*dispatch)(struct event_base*, void*, struct timeval*);
+};
+
+void* event_init(void);
+void event_set(struct event*, int, short, void (*)(int, short, void*), void*);
+int event_add(struct event*, struct timeval *);
+int event_del(struct event*);
+void event_active(struct event*, int);
+int event_dispatch(void);
+
+int event_base_priority_init(struct event_base*, int);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
