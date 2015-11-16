@@ -5,17 +5,19 @@
 extern "C" {
 #endif
 
-#define EVENT_READ		0x01
-#define EVENT_WRITE		0x02
-#define EVENT_TIMEOUT	0x04
-#define EVENT_SIGNAL	0x08
-#define EVENT_PERSIST	0x10
+/* 事件类型的定义*/ 
+#define EVENT_READ		0x01	//io事件 read
+#define EVENT_WRITE		0x02	//io事件 write
+#define EVENT_TIMEOUT	0x04	//超时事件
+#define EVENT_SIGNAL	0x08	//信号事件
+#define EVENT_PERSIST	0x10	//辅助选项, 表示是一个永久事件
 
-#define EVLIST_INIT		0x01
-#define EVLIST_INSERTED	0x02
-#define EVLIST_TIMEOUT	0x04
-#define EVLIST_SIGNAL	0x08
-#define EVLIST_ACTIVE	0x10
+/* 事件状态的定义 */
+#define EVLIST_INIT		0x01	//event已被初始化
+#define EVLIST_INSERTED	0x02	//event在已注册事件队列中
+#define EVLIST_TIMEOUT	0x04	//event在time堆中
+#define EVLIST_SIGNAL	0x08	//用于信号事件, 在信号事件队列 (暂时不用)
+#define EVLIST_ACTIVE	0x10	//event在就绪队列中
 
 #define EVLIST_ALL		0x1F
 
@@ -26,7 +28,7 @@ struct event {
 
 	struct event_base *ev_base;
 
-	int ev_fd;
+	int ev_fd;			//对于io事件,是绑定的文件描述符;对于signal事件, 是绑定的信号
 	short ev_events;	//Event类型
 
 	void (*ev_callback)(int, short, void *arg); //事件处理回调函数
@@ -34,9 +36,9 @@ struct event {
 	struct timeval ev_timeout;
 
 	int ev_flags;	//Event当前的状态
-	int ev_res;
+	int ev_res;		//记录当前激活事件的类型
 	int ev_pri;		//优先级
-	void *ev_arg;
+	void *ev_arg;	//任意类型的数据
 };
 
 struct eventop {

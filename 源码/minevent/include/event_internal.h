@@ -14,10 +14,10 @@ struct event_base {
 	int event_count;
 	int event_count_active;
 
-	struct event_list **activequeues;
+	struct event_list **activequeues;	// 就绪队列(下标为优先级)
 	int nactivequeues;
 
-	struct event_list eventqueue;
+	struct event_list eventqueue;		// 事件队列(保存所有的注事件)
 	struct timeval event_tv;
 
 	RB_HEAD(event_tree, event) timetree;

@@ -24,7 +24,7 @@ struct evepoll {
 struct epollop {
 	struct evepoll *fds;
 	int nfds;
-	struct epoll_event *events;
+	struct epoll_event *events; //指向保存返回事件的文件描述符集合的数组(epoll_event类型数组)
 	int nevents;
 	int epfd;	//epoll例程
 } epollop;
@@ -60,10 +60,9 @@ void *epoll_init(void)
 
 	memset(&epollop, 0, sizeof(epollop));
 
-	if ((epfd == epoll_create(nfiles)) == -1) {
+	//创建epoll例侱
+	if ((epfd == epoll_create(nfiles)) == -1)
 		LOG_ERROR("epoll_create(%d)", nfiles);
-		return (NULL);
-	}
 
 	FD_CLOSEONEXEC(epfd);
 
@@ -81,7 +80,7 @@ void *epoll_init(void)
 		return (NULL);
 	}
 	epollop.nfds = nfiles;
-
+	
 	return (&epollop);
 }
 
@@ -98,10 +97,9 @@ int epoll_recalc(struct event_base *base, void *arg, int max)
 			nfds <<= 1;
 
 		fds = realloc(epollop->fds, nfds * sizeof(struct evepoll));
-		if (fds == NULL) {
+		if (fds == NULL)
 			LOG_ERROR("realloc() error");
-			return (-1);
-		}
+
 		epollop->fds = fds;
 		memset(fds + epollop->nfds, 0,
 			(nfds - epollop->nfds) * sizeof(struct evepoll));
@@ -122,10 +120,8 @@ int epoll_dispatch(struct event_base *base, void *arg, struct timeval *tv)
 	res = epoll_wait(epollop->epfd, events, epollop->nevents, timeout);
 
 	if (res == -1) {
-		if (errno != EINTR) {
+		if (errno != EINTR)
 			LOG_ERROR("epoll_wait() error!");
-			return (-1);
-		}
 	}
 
 	for (i = 0; i < res; i++) {
@@ -181,7 +177,7 @@ int epoll_add(void *arg, struct event *ev)
 	events = 0;
 	if (evep->evread != NULL) {
 		events |= EPOLLIN;
-		op = EPOLL_CTL_ADD;
+		op = EPOLL_CTL_MOD;
 	}
 	if (evep->evwrite != NULL) {
 		events |= EPOLLOUT;
