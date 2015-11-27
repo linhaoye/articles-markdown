@@ -21,6 +21,27 @@ extern "C" {
 
 #define EVLIST_ALL		0x1F
 
+/* Fix so that ppl dont have to run with <sys/queue.h> */
+#ifndef TAILQ_ENTRY
+#define _EVENT_DEFINED_TQENTRY
+#define TAILQ_ENTRY(type)						\
+struct {								\
+	struct type *tqe_next;	/* next element */			\
+	struct type **tqe_prev;	/* address of previous next element */	\
+}
+#endif /* !TAILQ_ENTRY */
+#ifndef RB_ENTRY
+#define _EVENT_DEFINED_RBENTRY
+#define RB_ENTRY(type)							\
+struct {								\
+	struct type *rbe_left;		/* left element */		\
+	struct type *rbe_right;		/* right element */		\
+	struct type *rbe_parent;	/* parent element */		\
+	int rbe_color;			/* node color */		\
+}
+#endif /* !RB_ENTRY */
+
+struct event_base;
 struct event {
 	TAILQ_ENTRY(event) ev_next;
 	TAILQ_ENTRY(event) ev_active_next;

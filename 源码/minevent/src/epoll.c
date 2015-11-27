@@ -119,9 +119,13 @@ int epoll_dispatch(struct event_base *base, void *arg, struct timeval *tv)
 	timeout = tv->tv_sec * 1000 + (tv->tv_usec + 999) / 1000;
 	res = epoll_wait(epollop->epfd, events, epollop->nevents, timeout);
 
+	LOG_DEBUG("epfd:%d", epollop->epfd);
+
 	if (res == -1) {
 		if (errno != EINTR)
 			LOG_ERROR("epoll_wait() error!");
+
+		return 0;
 	}
 
 	for (i = 0; i < res; i++) {
@@ -138,6 +142,11 @@ int epoll_dispatch(struct event_base *base, void *arg, struct timeval *tv)
 
 		if (what & EPOLLIN) {
 			evread = evep->evread;
+			which |= EVENT_READ;
+		}
+
+		if (what & EPOLLOUT) {
+			evwrite = evep->evwrite;
 			which |= EVENT_WRITE;
 		}
 
