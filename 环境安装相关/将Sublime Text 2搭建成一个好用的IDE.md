@@ -135,7 +135,7 @@ Ctrl+Shift+T。
 
 　　8.emmet
   
-	前段神器, 减少大量的工作量, 使用方法可以参考Emmet：HTML/CSS代码快速编写神器或者官方文档。
+    前段神器, 减少大量的工作量, 使用方法可以参考Emmet：HTML/CSS代码快速编写神器或者官方文档。
 
 　　9.AndyJS2插件
 
@@ -149,23 +149,23 @@ Ctrl+Shift+T。
 
 　　该插件可以实现快速定位到函数定义的地方
 
-	12.alignment
+    12.alignment
 
-	这个忘了干嘛的了, 好像是控制所有类型文本的缩进
+    这个忘了干嘛的了, 好像是控制所有类型文本的缩进
 
-	13.converttoUTF8
+    13.converttoUTF8
 
-	编辑的所有文件都使用UTF-8编码
+    编辑的所有文件都使用UTF-8编码
 
-	14.markdownediting或者markdownPerview
+    14.markdownediting或者markdownPerview
 
-	这个是写Markdown必备的。可以在包管理器中安装。装完之后，写作Markdown时（右下角显示语法为Markdown），可以按ctrl+b，直接就会生成HTML，并在浏览器中显示。
+    这个是写Markdown必备的。可以在包管理器中安装。装完之后，写作Markdown时（右下角显示语法为Markdown），可以按ctrl+b，直接就会生成HTML，并在浏览器中显示。
 
-	16.jsformat
+    16.jsformat
 
-	JavaScript代码格式化
+    JavaScript代码格式化
 
-	17.SyntaxChecker
-	语法检测, 支持 Ruby , Perl , PHP , XML(需安装其环境)
+    17.SyntaxChecker
+    语法检测, 支持 Ruby , Perl , PHP , XML(需安装其环境)
 
 　　18.为了避免打开含中文字符的文件出现乱码，需要先安装GBK Encoding Support这个插件，再安装ConvertToUTF8插件即可。
