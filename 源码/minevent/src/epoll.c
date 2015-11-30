@@ -61,7 +61,7 @@ void *epoll_init(void)
 	memset(&epollop, 0, sizeof(epollop));
 
 	//创建epoll例侱
-	if ((epfd == epoll_create(nfiles)) == -1)
+	if ((epfd = epoll_create(nfiles)) == -1)
 		LOG_ERROR("epoll_create(%d)", nfiles);
 
 	FD_CLOSEONEXEC(epfd);
@@ -119,11 +119,9 @@ int epoll_dispatch(struct event_base *base, void *arg, struct timeval *tv)
 	timeout = tv->tv_sec * 1000 + (tv->tv_usec + 999) / 1000;
 	res = epoll_wait(epollop->epfd, events, epollop->nevents, timeout);
 
-	LOG_DEBUG("epfd:%d", epollop->epfd);
-
 	if (res == -1) {
 		if (errno != EINTR)
-			LOG_ERROR("epoll_wait() error!");
+			LOG_ERROR("epoll_wait() error! %s", strerror(errno));
 
 		return 0;
 	}
