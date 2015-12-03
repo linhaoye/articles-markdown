@@ -90,29 +90,36 @@ import urllib2,os;pf='Package Control.sublime-package';ipp=sublime.installed_pac
 
 　　Tag插件可以为web开发者提供html和css标签，很方便快捷，对于web前端设计者非常实用。  
 
+
 　　2.Prefixr插件  
 
 　　为css3提供一些前缀  
+
 
 　　3.Terminal插件  
 
 　　Terminal插件可以允许在Sublime Text2中打开cmd命令窗口，很实用的一个插件，安装好该插件好，打开cmd命令窗口的快捷键是 `Ctrl+Shift+T`。  
 
+
 　　4.SublimeTmpl插件  
 
 　　这个插件允许用户定义文件的模板，比如在写一个html文件时，老是重复文件头的一些引入信息很繁琐，可以定义一个模板直接生成必须的信息，具体的SublimeTmpl插件用法请自行百度。  
+
 
 　　5.SideBarEnhancements插件  
 
 　　一个增强侧边栏文件夹浏览功能的插件，比较不错。  
 
+
 　　6.DocBlockr插件  
 
 　　用来生成注释块的插件，安装好之后直接输入"/*"，然后再按回车键，即可生成代码注释块。  
 
+
 　　7.SublimeCodeIntel插件  
 
 　　智能提示插件，这个插件的智能提示功能非常强大，可以自定义提示的内容库，我的Python智能提示设置（配置文件路径为packages\SublimeCodeIntel-master\.codeintel\config）为：  
+
 
 ```javascript
 {
@@ -125,39 +132,50 @@ import urllib2,os;pf='Package Control.sublime-package';ipp=sublime.installed_pac
 
 　　其中“pythonExtraPaths”就是需要智能提示所需要用到的内容库。  
 
+
 　　8.emmet  
   
     前段神器, 减少大量的工作量, 使用方法可以参考Emmet：HTML/CSS代码快速编写神器或者官方文档。  
+
 
 　　9.AndyJS2插件  
 
 　　一款针对Javsscript和jquery智能提示的插件。  
 
+
 　　10.jquery插件  
 
 　　jquery提示库。  
+
 
 　　11.Ctags插件  
 
 　　该插件可以实现快速定位到函数定义的地方  
 
+
     12.alignment  
 
     这个忘了干嘛的了, 好像是控制所有类型文本的缩进  
+
 
     13.converttoUTF8  
 
     编辑的所有文件都使用UTF-8编码  
 
+
     14.markdownediting或者markdownPerview  
 
     这个是写Markdown必备的。可以在包管理器中安装。装完之后，写作Markdown时（右下角显示语法为Markdown），可以按ctrl+b，直接就会生成HTML，并在浏览器中显示。  
+
 
     16.jsformat  
 
     JavaScript代码格式化  
 
+
     17.SyntaxChecker  
+   
     语法检测, 支持 Ruby , Perl , PHP , XML(需安装其环境)  
+
 
 　　18.为了避免打开含中文字符的文件出现乱码，需要先安装GBK Encoding Support这个插件，再安装ConvertToUTF8插件即可。  
