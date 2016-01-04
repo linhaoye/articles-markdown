@@ -10,9 +10,8 @@
 
 class Curl
 {
-	const SUCCESS        = 0x000;
-	const POST_ERROR     = 0x001;
-	const DOWNLOAD_ERROR = 0x002;
+	const SUCCESS = 0x000;
+	const FAIL    = 0x001;
 
 	/**
 	 * post
@@ -52,7 +51,7 @@ class Curl
 			'CURLOPT_TIMEOUT'        => 30,
 			'CURLOPT_ENCODING'       => '',
 			'CURLOPT_IPRESOLVE'      => 1,
-			'CURLOPT_RETURNTRANSFER' = true,
+			'CURLOPT_RETURNTRANSFER' => true,
 			'CURLOPT_SSL_VERIFYPEER' => false,
 			'CURLOPT_CONNECTTIMEOUT' => 10,
 		);
@@ -132,7 +131,7 @@ class Curl
 		if (!$this->post)
 		{
 			return array(
-				'error'   => self::POST_ERROR,
+				'error'   => self::ERROR,
 				'message' => '未设置POST信息',
 			);
 		}
@@ -165,7 +164,7 @@ class Curl
 		if (!$this->download)
 		{
 			return array(
-				'error'   => self::DOWNLOAD_ERROR,
+				'error'   => self::ERROR,
 				'message' => '未设置下载地址',
 			);
 		}
@@ -230,7 +229,7 @@ class Curl
 	{
 		$ch = curl_init();
 
-		$options = array_merge($this->default, $this->options);
+		$options = array_merge($this->default, $this->option);
 		foreach ($options as $key => $val)
 		{
 			if (is_string($key))
@@ -277,11 +276,11 @@ class Curl
 	 * @return [type]        [description]
 	 * 
 	 */
-	private function build_post_data($input, $pre = null)
+	public function build_post_data($input, $pre = null)
 	{
 		if (is_array($input))
 		{
-			static $output = array();
+			$output = array();
 
 			foreach ($input as $key => $value)
 			{
@@ -298,4 +297,92 @@ class Curl
 		return $input;
 	}
 }
+
+class TestCurl
+{
+	public function __construct()
+	{
+		$this->curl = new Curl();
+	}
+
+	public function run()
+	{
+		$this->testGet();
+		$this->testPost();
+		$this->testBuildPostData();
+		$this->testRetry();
+		$this->testDownload();
+	}
+
+	public function testGet()
+	{
+		$remote = $this->curl->get("http://www.baidu.com");
+		$this->printTest($remote['error'], __FUNCTION__);
+		// var_dump($remote);	
+	}
+
+	public function testPost()
+	{
+		$postData = array(
+			'name'  => "kate",
+			'pass'  => '1234',
+			'array' => array(
+				'photo' => "http://baidu.images.com/2e3dc.jpg",
+				'goto'  => 2,
+				'infos' => array(
+					'test1' => 'string',
+					'test2' => 12.4,
+					'test3' => true,
+				)
+			),
+		);
+		$this->curl->post($postData)->post("test4", 3.1415926);
+		$this->printTest(Curl::SUCCESS, __FUNCTION__);
+	}
+
+	public function testRetry()
+	{
+		$this->curl->retry(2);
+		$this->printTest(Curl::SUCCESS, __FUNCTION__);
+	}
+
+	public function testDownload()
+	{
+		$reslut = $this->curl->download('http://123.kmg898.com/www/file-download-355-left.html?sid=314ggbifsqg1s4fakhjr380p27')->save('D:\test.doc');
+
+		$this->printTest($reslut['error'], __FUNCTION__);
+	}
+
+	public function testBuildPostData()
+	{
+		$postData = array(
+			'name'  => "kate",
+			'pass'  => '1234',
+			'array' => array(
+				'photo' => "http://baidu.images.com/2e3dc.jpg",
+				'goto'  => 2,
+				'infos' => array(
+					'test1' => 'string',
+					'test2' => 12.4,
+					'test3' => true,
+				)
+			),
+		);
+
+		$data = $this->curl->build_post_data($postData);
+		$data = $this->curl->build_post_data($postData, '_');
+		$this->printTest(Curl::SUCCESS, __FUNCTION__);
+	}
+
+	private function printTest($code, $func)
+	{
+		if ($code === Curl::SUCCESS)
+			print "test: ".$func." ok\r\n";
+		else
+			print "test: ".$func." fail\r\n";
+	}
+}
+
+$test = new TestCurl();
+$test->run();
  ?>
