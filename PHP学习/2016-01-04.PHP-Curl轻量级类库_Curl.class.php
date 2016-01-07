@@ -113,7 +113,7 @@ class Curl
 		}
 		else
 		{
-			$file = sprintf("@{$s};type={%s};filename={%s}", $path, $type, $name);
+			$file = sprintf("@%s;type=%s;filename=%s", $path, $type, $name);
 		}
 
 		return $this->post($field, $file);
