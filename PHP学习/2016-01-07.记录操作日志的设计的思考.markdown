@@ -1,0 +1,89 @@
+前一陈子, 自己重构的公司后台的权限模块, 其中有一个需求是:`添加操作日志记录`. 每一个用户要对自己的每一次操作负责.
+一般而言系统对操作日志记录方案: 先定义一系列的日志操作类型, 比如配置文件方式.
+
+`actiontype.cnf`
+```php
+return array(
+	'product_mod' => '产品修改',
+	'product_del' => '产品删除',
+	...
+);
+```
+如果用户A登录系统对某款产品进行了修改操作, 那么我们就可以找出对应操作类型以及他所做的操作内容记录到日志表中去了.
+
+`日志表的设计如下`
+```sql
+CREATE TABLE `admin_logs` (
+	`id`  int(10) NOT NULL AUTO_INCREMENT ,
+	`op`  varchar(20) CHARACTER SET utf8 COLLATE utf8_general_ci NULL DEFAULT NULL COMMENT '操作事件' ,
+	`admin_id`  int(10) NULL DEFAULT 0 COMMENT '管理员ID' ,
+	`user_id`  int(10) NULL DEFAULT 0 COMMENT '会员ID' ,
+	`create_on`  int(11) NULL DEFAULT 0 COMMENT '创建时间',
+	`text`  text CHARACTER SET utf8 COLLATE utf8_general_ci NULL COMMENT '日志内容',
+	PRIMARY KEY (`id`)
+)
+ENGINE=InnoDB
+DEFAULT CHARACTER SET=utf8 COLLATE=utf8_general_ci
+COMMENT='操作日志'
+```
+
+当我们的日志操作事件越来越多的时候, 用配置文件的方式显然在管理上不是那么有效了.我们采取数据库的配置方式, 然后可以
+考虑作文件缓存以提供性能优化. 于是日志类型的表如下:
+
+```sql
+CREATE TABLE `actiontype` (
+	`id`  int(10) UNSIGNED NOT NULL AUTO_INCREMENT ,
+	`type_idenfify`  varchar(80) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL COMMENT '日志类型标识' ,
+	`type_name`  varchar(128) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL COMMENT '标题' ,
+	`status`  tinyint(2) NOT NULL COMMENT '状态' ,
+	`create_on`  int(11) NOT NULL DEFAULT 0 COMMENT '创建时间' ,
+	`creator`  int(10) NOT NULL COMMENT '创建人' ,
+
+	PRIMARY KEY (`id`)
+)
+ENGINE=InnoDB
+DEFAULT CHARACTER SET=utf8 COLLATE=utf8_general_ci
+COMMENT='日志事件类型'
+```
+
+记录日志我们可以写一个方法:
+
+```php
+function log_action($admin_id, $action, $text)
+{
+	$action_cnf = array();
+	if (is_file(YOU_PATH.'/actiontype.cnf')) {
+		$action_cnf = include YOU_PATH . 'actiontype.cnf';
+		$action_cnf = array_keys($action_cnf);
+	}
+
+	//查询
+	if (empty($action_cnf))
+	{
+		$rs = $this->db->from($this->db->dbprefix("actiontype"))
+				->distinct("type_idenfify")
+				->select(array("type_identify"))
+				->where("status", 1)
+				->get()
+				->result();
+
+		foreach ($rs as $item)
+		{
+			$action_cnf [] = $item->type_identify;
+		}
+	}
+
+	if (!in_array($action, $action_cnf))
+	{
+		die("不存在的操作类型!");
+	}
+
+	//插入日志记录
+	$this->db->insert($this->db->prefix("admin_logs"), array(
+		'admin_id'  => $admin_id,
+		'op'        => $op,
+		'text'      => $text,
+		'create_on' => time()
+	));
+}
+```
