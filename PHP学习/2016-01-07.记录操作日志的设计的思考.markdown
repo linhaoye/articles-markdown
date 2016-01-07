@@ -33,7 +33,7 @@ COMMENT='操作日志'
 ```sql
 CREATE TABLE `actiontype` (
 	`id`  int(10) UNSIGNED NOT NULL AUTO_INCREMENT ,
-	`type_idenfify`  varchar(80) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL COMMENT '日志类型标识' ,
+	`type_identify`  varchar(80) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL COMMENT '日志类型标识' ,
 	`type_name`  varchar(128) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL COMMENT '标题' ,
 	`status`  tinyint(2) NOT NULL COMMENT '状态' ,
 	`create_on`  int(11) NOT NULL DEFAULT 0 COMMENT '创建时间' ,
@@ -43,7 +43,10 @@ CREATE TABLE `actiontype` (
 )
 ENGINE=InnoDB
 DEFAULT CHARACTER SET=utf8 COLLATE=utf8_general_ci
-COMMENT='日志事件类型'
+COMMENT='日志事件类型';
+
+ALTER TABLE `actiontype` ADD UNIQUE (`type_identify`);
+
 ```
 
 记录日志我们可以写一个方法:
@@ -86,4 +89,76 @@ function log_action($admin_id, $action, $text)
 		'create_on' => time()
 	));
 }
+```
+
+使用时:
+```php
+namespace Ctroller;
+Procduct extends Controller
+{
+	public del($id = '')
+	{
+		//do something before
+
+		log_action("product_del", $this->admin_id, "删除XXXX产品");
+
+		//do something after
+	}
+}
+```
+
+
+当业务系统越来越复杂时, 要求记录的日志类型也越来越多. 我们在记录日志时, 不可能都记住所有日志类型,
+数量少还好, 当数量多的时候, 就需要去翻查, 有时候会比较影响效率.
+
+我们延伸一下, 可以采取一种取巧的方式来处理. 使用的类的标识跟函数的标识组合一起作为日志类型的标识.
+我们使用时就可以这样:
+
+```php
+namespace Ctroller;
+Procduct extends Controller
+{
+	public del($id = '')
+	{
+		//do something before
+
+		log_action(__CLASS__ .'@'. __FUNCTION__, $this->admin_id, "删除XXXX产品");
+
+		//do something after
+	}
+}
+```
+
+另外log_action这个方法, 其实还可以拓展一下的:
+
+```php
+function log_action($action, $admin_id, $text, $action_name)
+{
+	$action_cnf = array();
+	if (is_file(YOU_PATH.'/actiontype.cnf')) {
+		$action_cnf = include YOU_PATH . 'actiontype.cnf';
+		$action_cnf = array_keys($action_cnf);
+	}
+
+	//因为我们type_identify是唯一索引, 用IGNORE避免重复插入
+	if (!in_array($action, $action_cnf))
+	{
+		$fmt = "INSERT IGNORE INTO actiontype(type_identify, type_name) VALUES('%s', '%s')";
+		$sql = sprintf($fmt, $action, $action_name);
+
+		$this->db->query($sql);
+	}
+
+	//插入日志记录
+	$this->db->insert($this->db->prefix("admin_logs"), array(
+		'admin_id'  => $admin_id,
+		'op'        => $op,
+		'text'      => $text,
+		'create_on' => time()
+	));
+}
+
+// do something
+log_action(__CLASS__.'@'.__FUNCTION__, $this->admin_id, 'XXXXXXXXX', '删除产品');
+
 ```
