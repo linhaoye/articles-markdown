@@ -173,9 +173,18 @@ class Curl
 
 		if ($result['error'] === self::SUCCESS)
 		{
-			$fp = fopen($path, 'w');
-			fwrite($fp, $result['body']);
-			fclose($fp);
+			$dir = dirname(realpath($path));
+			
+			if (is_writable($dir))
+			{
+				$fp = fopen($path, 'w');
+				fwrite($fp, $result['body']);
+				fclose($fp);
+			}
+			return array(
+				'error'   => self::ERROR,
+				'message' => '目录不存在或不可写'
+			);
 		}
 
 		return $result;
