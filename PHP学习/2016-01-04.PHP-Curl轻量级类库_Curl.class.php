@@ -149,7 +149,8 @@ class Curl
 	public function download($url)
 	{
 		$this->download = true;
-		return $this->set('CURLOPT_URL', $url);
+		//修复405错误
+		return $this->set('CURLOPT_CUSTOMREQUEST', 'GET')->set('CURLOPT_URL', $url);
 	}
 
 	/**
@@ -173,18 +174,19 @@ class Curl
 
 		if ($result['error'] === self::SUCCESS)
 		{
-			$dir = dirname(realpath($path));
+			$pathinfo = pathinfo($path);
+			$dir      = realpath($pathinfo['dirname']);
 
-			if (is_writable($dir))
+			if (!is_writable($dir))
 			{
-				$fp = fopen($path, 'w');
-				fwrite($fp, $result['body']);
-				fclose($fp);
+				return array(
+					'error'   => self::ERROR,
+					'message' => '目录不存在或不可写'
+				);
 			}
-			return array(
-				'error'   => self::ERROR,
-				'message' => '目录不存在或不可写'
-			);
+			$fp = fopen($path, 'w');
+			fwrite($fp, $result['body']);
+			fclose($fp);
 		}
 
 		return $result;
@@ -357,7 +359,7 @@ class TestCurl
 
 	public function testDownload()
 	{
-		$reslut = $this->curl->download('http://123.kmg898.com/www/file-download-355-left.html?sid=314ggbifsqg1s4fakhjr380p27')->save('D:\test.doc');
+		$reslut = $this->curl->download('http://pic.33.la/20130523tpxh/4120.jpg')->save('D:\abc.jpg');
 
 		$this->printTest($reslut['error'], __FUNCTION__);
 	}
