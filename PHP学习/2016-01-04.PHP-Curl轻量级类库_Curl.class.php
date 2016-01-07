@@ -11,7 +11,7 @@
 class Curl
 {
 	const SUCCESS = 0x000;
-	const FAIL    = 0x001;
+	const ERROR   = 0x001;
 
 	/**
 	 * post
@@ -174,7 +174,7 @@ class Curl
 		if ($result['error'] === self::SUCCESS)
 		{
 			$dir = dirname(realpath($path));
-			
+
 			if (is_writable($dir))
 			{
 				$fp = fopen($path, 'w');
