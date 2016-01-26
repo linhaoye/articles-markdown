@@ -8,13 +8,10 @@ static void vec_expand(char **data, int *length, int *capacity, int memsz)
     if (*length + 1 > *capacity)
     {
         if (*capacity == 0)
-        {
             *capacity = 1;
-        }
         else
-        {
             *capacity <<= 1;
-        }
+        
         *data = realloc(*data, (size_t)(*capacity * memsz));
     }
 }
