@@ -1,0 +1,278 @@
+<html lang="en"><head>
+    <meta charset="UTF-8">
+    <title></title>
+<style id="system" type="text/css">h1,h2,h3,h4,h5,h6,p,blockquote {    margin: 0;    padding: 0;}body {    font-family: "Helvetica Neue", Helvetica, "Hiragino Sans GB", Arial, sans-serif;    font-size: 13px;    line-height: 18px;    color: #737373;    margin: 10px 13px 10px 13px;}a {    color: #0069d6;}a:hover {    color: #0050a3;    text-decoration: none;}a img {    border: none;}p {    margin-bottom: 9px;}h1,h2,h3,h4,h5,h6 {    color: #404040;    line-height: 36px;}h1 {    margin-bottom: 18px;    font-size: 30px;}h2 {    font-size: 24px;}h3 {    font-size: 18px;}h4 {    font-size: 16px;}h5 {    font-size: 14px;}h6 {    font-size: 13px;}hr {    margin: 0 0 19px;    border: 0;    border-bottom: 1px solid #ccc;}blockquote {    padding: 13px 13px 21px 15px;    margin-bottom: 18px;    font-family:georgia,serif;    font-style: italic;}blockquote:before {    content:"C";    font-size:40px;    margin-left:-10px;    font-family:georgia,serif;    color:#eee;}blockquote p {    font-size: 14px;    font-weight: 300;    line-height: 18px;    margin-bottom: 0;    font-style: italic;}code, pre {    font-family: Monaco, Andale Mono, Courier New, monospace;}code {    background-color: #fee9cc;    color: rgba(0, 0, 0, 0.75);    padding: 1px 3px;    font-size: 12px;    -webkit-border-radius: 3px;    -moz-border-radius: 3px;    border-radius: 3px;}pre {    display: block;    padding: 14px;    margin: 0 0 18px;    line-height: 16px;    font-size: 11px;    border: 1px solid #d9d9d9;    white-space: pre-wrap;    word-wrap: break-word;}pre code {    background-color: #fff;    color:#737373;    font-size: 11px;    padding: 0;}@media screen and (min-width: 768px) {    body {        width: 748px;        margin:10px auto;    }}</style><style id="custom" type="text/css"></style></head>
+<body marginheight="0"><h2>在centos5.5中编译LNMP环境</h2>
+<h3>一.配置好ip, dns, 网关, 确保使用远程连接工具能够连接服务器</h3>
+<pre><code>centos设置ip地址，网关, dns教程: http://www.osyumwei.com/archives/423.html</code></pre>
+<h3>二.配置防火墙, 开启80端口,以及3306端口通过</h3>
+<pre><code>vi /etc/sysconfig/iptables
+-A INPUT -m state --state NEW -m tcp -p tcp --dport 80 -j ACCEPT   #允许80端口通过防火墙
+-A INPUT -m state --state NEW -m tcp -p tcp --dport 3306 -j ACCEPT  #允许3306端口通过防火墙</code></pre>
+<p>特别提示：很多网友把这两条规则添加到防火墙配置的最后一行，导致防火墙启动失败，正确的应该是添加到默认的22端口这条规则的下面
+添加好之后防火墙规则如下所示
+</p>
+<pre><code>#########################################################
+# Firewall configuration written by system-config-firewall
+# Manual customization of this file is not recommended.
+*filter
+:INPUT ACCEPT [0:0]
+:FORWARD ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+-A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+-A INPUT -p icmp -j ACCEPT
+-A INPUT -i lo -j ACCEPT
+-A INPUT -m state --state NEW -m tcp -p tcp --dport 22 -j ACCEPT
+-A INPUT -m state --state NEW -m tcp -p tcp --dport 80 -j ACCEPT
+-A INPUT -m state --state NEW -m tcp -p tcp --dport 3306 -j ACCEPT
+-A INPUT -j REJECT --reject-with icmp-host-prohibited
+-A FORWARD -j REJECT --reject-with icmp-host-prohibited
+COMMIT
+#########################################################</code></pre>
+<pre><code>/etc/init.d/iptables restart #最后重启防火墙使配置生效</code></pre>
+<h3>三.关闭SELINUX</h3>
+<pre><code>vi /etc/selinux/config
+#SELINUX=enforcing #注释掉
+#SELINUXTYPE=targeted #注释掉
+SELINUX=disabled #增加
+:wq  #保存退出
+shutdown -r now #重启系统</code></pre>
+<h3>四.系统约定</h3>
+<pre><code>软件源代码码包存放位置: /root/src
+源码包编译安装的位置: /usr/local/要安装的位置</code></pre>
+<h3>五.所需的软件包</h3>
+<pre><code>1.libxml2-2.6.30.tar.gz
+2.libmcrypt-2.5.8.tar.gz
+3.zlib-1.2.3.tar.gz
+4.libpng-1.2.31.tar.gz
+5.jpegsrc.v6b.tar.gz
+7.freetype-2.3.5.tar.gz
+8.autoconf-2.61.tar.gz
+9.gd-2.0.35.tar.gz
+10.ncurses-5.6.tar.gz
+11.pcre-8.34.tar.gz
+12.nginx-1.4.7.tar.gzx
+13.mysql-5.0.41.tar.gz
+14.php-5.2.6-fpm-0.5.9.diff.gz
+15.php-5.2.6.tar.gz
+16.ZendOptimizer-3.2.6-linux-glibc21-i386.tar.gz
+17.phpMyAdmin-3.0.0-rc1-all-languages.tar.gz</code></pre>
+<h3>六.解压软件包</h3>
+<pre><code class="lang-javascript">tar -zxvf 软件包名字
+//为了方便, 可以编写shell脚本自动解压
+
+##shell脚本: extract_soft.sh
+SRC_DIR = '/root/src';
+FILE_LIST = `ls $SRC_DIR`;
+
+for file in $FILE_LIST
+    tar -zxvf $file $SRC_DIR -C
+done
+
+更改脚本执行限
+chmod +x extract_soft.sh
+./extract_soft.sh</code></pre>
+<h3>七.安装软件</h3>
+<p>1.安装libxml2库文件
+</p>
+<pre><code>cd /root/src/libxml2-2.6.30
+./configure --prefix=/usr/local/libxml2/
+make 
+make install</code></pre>
+<p>2.安装libmcrypt 库文件
+</p>
+<pre><code>cd /root/src/libmcrypt-2.5.8
+./configure --prefix=/usr/local/libmcrypt/
+make 
+make install</code></pre>
+<p>3.安装libmcrypt库下的libltdl
+</p>
+<pre><code>cd /root/src/libmcrypt-2.5.8/libltdl
+./configure --enable-ltdl-install
+make
+make install</code></pre>
+<p>4.安装zlib 库文件
+</p>
+<pre><code>cd /root/src/zlib-1.2.3   
+./configure        不要指定安装路径，否则安装libpng时会出错。安装到默认位置。
+make               可以定义下 安装日志。make install &gt; /test/backup/zlib_20111218.install.log
+make install</code></pre>
+<p>5.安装 libpng 库文件
+</p>
+<pre><code>cd /root/src/libpng-1.2.31
+./configure --prefix=/usr/local/libpng/
+make
+make install</code></pre>
+<p>6.安装jpeg6 库文件
+</p>
+<pre><code>mkdir /usr/local/jpeg6          //jpeg6软件安装目录
+mkdir /usr/local/jpeg6/bin      //存放命令的目录
+mkdir /usr/local/jpeg6/lib      //jpeg6库文件所在目录
+mkdir /usr/local/jpeg6/include  //存放头文件目录
+mkdir -p /usr/local/jpeg6/man/man1  //存放手册目录  -p是创建连续的目录
+cd /root/src/jpeg-6b
+./configure --prefix=/usr/local/jpeg6/ --enable-shared --enable-static
+make
+make install</code></pre>
+<p>7.安装freetype 库文件
+</p>
+<pre><code>cd /root/src/freetype-2.3.5
+./configure --prefix=/usr/local/freetype/
+make
+make install</code></pre>
+<p>8.安装autoconf 库文件
+</p>
+<pre><code>cd /root/src/autoconf-2.61
+./configure      //不要指定目录
+make 
+make install</code></pre>
+<p>9.安装GD库文件
+</p>
+<pre><code>cd /root/src/gd-2.0.35    //zlib没有指定安装目录，所以安装GD2不需要指定zlib的位置
+./configure --prefix=/usr/local/gd2/ --with-jpeg=/usr/local/jpeg6/ --with-freetype=/usr/local/freetype/
+make
+make install</code></pre>
+<p>10.安装pcre库
+</p>
+<pre><code>cd /root/src
+mkdir /usr/local/pcre #创建安装目录
+tar zxvf pcre-8.31.tar.gz
+cd pcre-8.31
+./configure --prefix=/usr/local/pcre #配置
+make
+make install</code></pre>
+<p>11.安装nginx软件
+</p>
+<pre><code>cd /root/src/nginx-1.4.7  
+groupadd www #添加www组
+useradd -g www www -s /bin/false #创建nginx运行账户www并加入到www组，不允许www用户直接登录系统
+tar zxvf nginx-1.2.3.tar.gz
+cd nginx-1.2.3
+./configure --prefix=/usr/local/nginx --without-http_memcached_module --user=www --group=www --with-http_stub_status_module --with-openssl=/usr/ --with-pcre=/usr/local/src/pcre-8.31
+注意:--with-pcre=/usr/local/src/pcre-8.31指向的是源码包解压的路径，而不是安装的路径，否则会报错
+make
+make install
+/usr/local/nginx/sbin/nginx #启动nginx</code></pre>
+<p>12.安装mysql数据库的关联软件
+</p>
+<pre><code>cd /root/src/ncurses-5.6   //这个一定要先安装，否则安装mysql会出错
+./configure --with-shared --without-debug --without-ada --enable-overwrite
+make 
+make install</code></pre>
+<p>13.安装mysql数据库
+</p>
+<pre><code>groupadd mysql     /添加一个mysql标准组
+useradd -g mysql mysql   //添加mysql用户并加到mysql组中
+cd /root/src/mysql-5.0.41
+./configure --prefix=/usr/local/mysql/ --with-extra-charsets=all
+make
+make install</code></pre>
+<p>设置mysql
+</p>
+<pre><code>cp support-files/my-medium.cnf /etc/my.cnf    //拷贝配置文件
+/usr/local/mysql/bin/mysql_install_db --user=mysql  //以mysql用户的身份建立数据表（多一个var目录）
+chown -R root /usr/local/mysql    //将mysql的主目录（即/usr/local/mysql）的属主设为root用户
+chown -R mysql /usr/local/mysql/var  //将var目录的属主设为mysql用户
+chgrp -R mysql /usr/local/mysql   //将mysql的主目录的属主设为mysql用户组
+/usr/local/mysql/bin/mysqld_safe  --user=mysql &amp;  //启动mysql
+
+
+cp /lamp/mysql-5.0.41/support-files/mysql.server /etc/rc.d/init.d/mysqld //将mysql.server这个文件copy到/etc/init.d/目录下，并更名为mysqld
+chown root.root /etc/rc.d/init.d/mysqld //将mysqld的属主设置为root
+chmod 755 /etc/rc.d/init.d/mysqld  //给/etc/init.d/mysqld这个文件赋予“执行”权限
+chkconfig --add mysqld  //加入到开机自动运行
+chkconfig --list mysqld
+chkconfig --levels 245 mysqld off  //运行级别为2 4 5</code></pre>
+<p>14.安装php
+</p>
+<pre><code>首先解压php-5.2.6.tar.gz  
+tar –zxvf php-5.2.17.tar.gz 
+gzip -cd hp-5.2.6-fpm-0.5.9.diff.gz | patch -d php-5.2.6 -p1 //给php2.6打补丁
+cd 
+
+
+cd /root/src/php-5.2.6
+./configure --prefix=/usr/local/php/ --with-config-file-path=/usr/local/php/etc/  --with-mysql=/usr/local/mysql/ --with-libxml-dir=/usr/local/libxml2/ --with-jpeg-dir=/usr/local/jpeg6/ --with-freetype-dir=/usr/local/freetype/ --with-gd=/usr/local/gd2/ --with-mcrypt=/usr/local/libmcrypt/ --with-mysqli=/usr/local/mysql/bin/mysql_config --enable-soap --enable-mbstring=all --enable-sockets --enable-fastcgi --enable-fpm
+make
+make install
+
+cp php.ini-dist /usr/local/php/etc/php.ini  // 拷贝php配置文件到/usr/local/php/etc/下 并命名为php.ini
+echo "Addtype application/x-httpd-php .php .phtml" &gt;&gt; /etc/httpd/httpd.conf  //作用是 让apache解析php
+/usr/local/apache2/bin/apachectl restart //重启apache
+安装时出现的错误：
+libltdl.so.3: cannot open shared object file: No such file or directory
+libltdl其实已经安装了，后来我又重新安装一次，还是出现这个问题，后来在网是找到这个方法
+网上找到的解决方法：
+ln -s /usr/local/lib/libltdl.so.3 /usr/lib/libltdl.so.3</code></pre>
+<p>14.配置Nginx支持php
+</p>
+<pre><code>
+-配置php-fpm
+Nginx+PHP需要    PHP生成可执行文件才可以，所以要利用fastcgi技术来实现Nginx与PHP的整合，这个只要我们安装是启用FastCGI即可.这里，我们用php-fpm来管理FastCGI(php-fpm已以补丁的形式加入到PHP中). 
+
+编辑配置文件:
+vim php-fpm.conf
+
+找到如下代码:
+Unix user of processes
+&lt;value name="user"&gt;nobody&lt;/value&gt;
+Unix group of processes
+&lt;value name="group"&gt;nobody&lt;/value&gt;
+
+为FastCGI指定用户，可使用默认的nobody,也可另行指定.
+
+启动php-cgi进程
+/usr/local/php5/sbin/php-fpm start
+
+-配置nginx
+
+#配置nginx支持PHP(在其中一个虚拟主机下面如下配置)
+location ~ .*\.(php|php5)?$
+{
+    #fastcgi_pass unix:/tmp/php-cgi.sock;
+    fastcgi_pass 127.0.0.1:9000;
+    fastcgi_index index.php;
+    include fastcgi.conf;
+}
+
+重启Nginx进程
+/usr/local/nginx/sbin/nginx -s reload</code></pre>
+<p>15.配置mysql
+</p>
+<pre><code>cd /usr/local/mysql
+bin/mysqladmin version //简单的测试
+bin/mysqladmin varibles //查看所有mysql参数
+bin/mysql -u root //没有密码可以直接登录本机服务器
+
+
+#查看授权表的所有用户
+#mysql&gt; select * from mysql.user \G;
+#删除除localhost之外的所有用户（提高安全性）
+#mysql&gt;delete from mysql.user where host!='localhost';
+#修改root用户的密码，这里的root用户指的是mysql的root用户，与Linux的root用户无关
+#mysql&gt;set password for 'root'@'localhost'=password('123456');
+#刷新权限
+#mysql&gt; FLUSH PRIVILEGES;</code></pre>
+<p>16.安装zend加速器
+</p>
+<pre><code>这个软件不是源代码，是二进制的bin文件 只需执行./install.sh即可
+然后根据提示安装
+如果./install.sh不能安装就用 ./install-tty安装
+这里需要填写配置文件的地址
+php：/usr/local/php/etc/
+Nginx：自动锁定</code></pre>
+<p>17.安装phpadmin
+</p>
+<pre><code>将解压的源码包拷贝到存放网站的目录下，并重命名为phpmyadmin
+[root@feng soft]# cp -a phpMyAdmin-3.0.0-rc1-all-languages /web/phpmyadmin  
+建立配置文件
+[root@feng phpmyadmin]# cp config.sample.inc.php  config.inc.php
+打开配置文件
+[root@feng phpmyadmin]# vi ./config.inc.php
+编辑配置文件,将cookie改为http
+/* Authentication type */
+$cfg['Servers'][$i]['auth_type'] = 'http';
+重启nginx
+/usr/local/nginx/sbin/nginx -s reload</code></pre>
+<p>Edit By <a href="#">Linhaoye</a></p>
+</body></html>
