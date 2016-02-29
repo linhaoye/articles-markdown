@@ -1,4 +1,4 @@
-###sizeof表达式
+####sizeof表达式
 ```c
 int main(void)
 {
@@ -13,7 +13,7 @@ int main(void)
 4 and 5
 ```
 
-###问: 以下这个语句是什么意思?
+####问: 以下这个语句是什么意思?
 ```c
 !ErrorHasOccured() ??!??! HandleError();
 ```
@@ -22,7 +22,7 @@ int main(void)
 !ErrorHasOccured() || HandleError();
 ```
 
-###类型推断
+####类型推断
 C++1x可以用auto来省略类型声明, 而C的auto关键字意思完全不同, 但是它可忽略(auto意思是非static, 和不写一样), C有__typeof__
 ```c
 #define var(left, right) __typeof__(right) left = (right)
@@ -33,7 +33,7 @@ C++1x可以用auto来省略类型声明, 而C的auto关键字意思完全不同,
 var (s, 1LL); //相当于 long long s = 1LL;
 ```
 
-###C有一个鲜为人知的运算符叫"趋向于", 写作"-->". 比如说实现一个倒数程序:
+####C有一个鲜为人知的运算符叫"趋向于", 写作"-->". 比如说实现一个倒数程序:
 ```c
 #include <stdio.h>
 
