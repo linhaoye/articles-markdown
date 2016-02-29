@@ -12,18 +12,39 @@ int main(void)
 ```
 4 and 5
 ```
+因为`sizeof`是编译时行为, 运行时不会执行.
 
 ####问: 以下这个语句是什么意思?
 ```c
 !ErrorHasOccured() ??!??! HandleError();
 ```
-它叫trigraph, 以上会被翻译为
+它叫`trigraph`, 以上会被翻译为
 ```c
 !ErrorHasOccured() || HandleError();
+
+类似的还有:
+```c
+#include <stdio.h>
+
+int main(void)
+{
+	int arr<::> = <%10, 20, 30%>; //note 1
+	printf("The second array element is <%d>.\n", arr<:1:>); //note 2
+	return 0;
+}
+```
+上面的执行结果是打印数组的每二个元素.
+
+它叫`digraph`, note 1,2会被翻译为
+```c
+int arr[] = {10, 20, 30};
+printf("The second array element is <%d>.\n", arr[1]);
+```
+
 ```
 
 ####类型推断
-C++1x可以用auto来省略类型声明, 而C的auto关键字意思完全不同, 但是它可忽略(auto意思是非static, 和不写一样), C有__typeof__
+C++1x可以用`auto`来省略类型声明, 而C的`auto`关键字意思完全不同, 但是它可忽略(`auto`意思是非`static`, 和不写一样), C有`__typeof__`
 ```c
 #define var(left, right) __typeof__(right) left = (right)
 ```
@@ -33,7 +54,7 @@ C++1x可以用auto来省略类型声明, 而C的auto关键字意思完全不同,
 var (s, 1LL); //相当于 long long s = 1LL;
 ```
 
-####C有一个鲜为人知的运算符叫"趋向于", 写作"-->". 比如说实现一个倒数程序:
+####C有一个鲜为人知的运算符叫"趋向于", 写作`-->`. 比如说实现一个倒数程序:
 ```c
 #include <stdio.h>
 
@@ -48,7 +69,7 @@ int main(void)
 	return 0;
 }
 ```
-上面程序会打印现:
+上面程序会打印出:
 ```
 9 8 7 6 5 4 3 2 1
 ```
