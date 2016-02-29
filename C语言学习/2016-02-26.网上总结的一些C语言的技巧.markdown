@@ -41,8 +41,6 @@ int arr[] = {10, 20, 30};
 printf("The second array element is <%d>.\n", arr[1]);
 ```
 
-```
-
 ####类型推断
 C++1x可以用`auto`来省略类型声明, 而C的`auto`关键字意思完全不同, 但是它可忽略(`auto`意思是非`static`, 和不写一样), C有`__typeof__`
 ```c
