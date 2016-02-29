@@ -21,6 +21,7 @@ int main(void)
 它叫`trigraph`, 以上会被翻译为
 ```c
 !ErrorHasOccured() || HandleError();
+```
 
 类似的还有:
 ```c
