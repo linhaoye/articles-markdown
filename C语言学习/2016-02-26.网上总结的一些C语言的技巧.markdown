@@ -93,7 +93,8 @@ fd = open(PATH "/log_file", flags);
 ####结构体的初始化
 注意它不是一般意义的全0初始化, 而逻辑0初始化, 这里引用一段stackoverflow上的英文:
 ```
-memset/calloc do “all bytes zero” (i.e. physical zeroes), which is indeed not defined for all types. { 0 } is guaranteed to intilaize everything with proper logical zero values. Pointers, for example, are guranteed to get their proper null values, even if the null-value on the given platform is 0xBAADFOOD
+memset/calloc do “all bytes zero” (i.e. physical zeroes), which is indeed not defined for all types.
+{ 0 } is guaranteed to intilaize everything with proper logical zero values. Pointers, for example, are guranteed to get their proper null values, even if the null-value on the given platform is 0xBAADFOOD
 ```
 
 ```c

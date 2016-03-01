@@ -1,3 +1,6 @@
+最近学习TCP/IP网络编程, 在写一个简单的http程序时, 要用到strtok函数, 由char*和const char*理解得不深的问题, debug了好久.
+有时学技术真不能够一知半解, 希望自己谨记吧.
+
 strtok函数分解字符串为一组标记串，原型为：extern char *strtok(char *s, char *delim);
 
 s为要分解的字符串，delim为分隔符字符串。首次调用时，s必须指向要分解的字符串，随后调用要把s设成NULL,strtok在s中查找包含在delim中的字符并用NULL(‘\0’)来替换，直到找遍整个字符串。返回指向目前找到的最后一个标记串，当没有标记串时则返回字符NULL。
