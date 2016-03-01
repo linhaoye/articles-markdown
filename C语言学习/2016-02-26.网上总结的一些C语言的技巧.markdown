@@ -1,3 +1,13 @@
+####前言
+c语言的tricks大多较为晦涩, 需要循充渐进的理解. 它要求我们对编译器/c语言标准都有一定了解.
+
+比如整数溢出的问题:
+```c
+a = b + c;
+```
+当b和c加起大于int范围时(`INT_MAX`), a就变成一个负数. 这有时会令人十分烦躁, 尤其在debug的时候.
+当然, 标准会告诉你每次都去检查它没有意义, 我们要的只是一个高速的语言. 类似c语言的雷区还有很多.
+
 ####sizeof表达式
 ```c
 int main(void)
@@ -71,4 +81,21 @@ int main(void)
 上面程序会打印出:
 ```
 9 8 7 6 5 4 3 2 1
+```
+
+####字符串的连接
+```c
+#define PATH "/var/www"
+fd = open(PATH "/log_file", flags);
+```
+在c语言中, 两个相邻的字符串会被拼接成一个字符串.
+
+####结构体的初始化
+注意它不是一般意义的全0初始化, 而逻辑0初始化, 这里引用一段stackoverflow上的英文:
+```
+memset/calloc do “all bytes zero” (i.e. physical zeroes), which is indeed not defined for all types. { 0 } is guaranteed to intilaize everything with proper logical zero values. Pointers, for example, are guranteed to get their proper null values, even if the null-value on the given platform is 0xBAADFOOD
+```
+
+```c
+struct my_struct a = {0};
 ```
