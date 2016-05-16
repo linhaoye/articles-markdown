@@ -1,0 +1,21 @@
+假设我们有一个数据库操作类，按照最原始的办法，我们的代码可以是这样子写的：
+```php
+<?php
+	class Db {
+		protected $adapter;
+
+		public function __construct()
+		{
+			$this->adapter = new iMySqli('localhost', 'root', '');
+		}
+		public function fetch_row($sql)
+		{
+			$this->adapter->query($sql);
+			//TODO:
+		}
+	}
+
+	class iMySqli{}
+?>
+```
+分析： 
