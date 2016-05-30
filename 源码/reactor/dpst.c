@@ -163,24 +163,38 @@ int Worker_exec(DSPT *dspt, int n) {
 void SIG_sigusr1(int signo) {
 	SG.manager_worker_reloading = 1;
 	SG.manager_reload_flag = 0;
-	printf("recev a sig[%d]\n", signo);
+}
+
+void SIG_sigterm(int signo) {
+	SG.status = 0;
 }
 
 /* 管理进程过程 */
 void DSPT_main(DSPT *dspt) {
 	int i;
+	int n;
 	pid_t pid;
+	Worker rworkers;
 
 	(void) signal(SIGUSR1, SIG_sigusr1);
+	(void) signal(SIGTERM, SIG_sigterm);
 
-	while (1) {
+	rworkers = Realloc(NULL, dspt->num_workers * sizeof(Worker));
+
+	while (SG.status) {
 		pid = wait(NULL);
+
 		if (pid < 0) {
-			perror("DSPT_main wait");
-			goto CLEAN;
+			if (SG.manager_worker_reloading == 0) {
+				perror("DSPT_main wait");
+			} else if (SG.manager_reload_flag == 0) {
+				memcpy(rworkers, dspt->workers, sizeof(Worker) * dspt->num_workers);
+				SG.manager_reload_flag = 1;
+				goto CLEAN;
+			}
 		}
 		//某个 worker进程意外结束
-		if (SG.status == 1 && pid != -1) {
+		if (SG.status && pid != -1) {
 			for (i = 0; i < dspt->num_workers; i++) {
 				if (pid != dspt->workers[i].pid)
 					continue;
@@ -196,8 +210,19 @@ void DSPT_main(DSPT *dspt) {
 		}
 		CLEAN:
 		if (SG.manager_worker_reloading == 1) {
+			if (n >= dspt->num_workers) {
+				SG.manager_worker_reloading = 0;
+				n = 0;
+				continue;
+			}
+			if (kill(rworkers[n].pid, SIGTERM) < 0) {
+				continue;
+			}
+			n ++;
 		}
 	}
+	
+	Free(rworkers);
 }
 
 void DSPT_init(DSPT *dspt, int num_workers) {
