@@ -3,10 +3,9 @@
    Some standard error handling routines used by various programs.
 */
 
-#include <stdio.h>
-#include <stdlib.h>
+
 #include <stdarg.h>
-#include <errno.h>
+#include "common.h"
 #include "err_func.h"
 #include "ename.c.inc"
 
@@ -14,9 +13,14 @@
 __attribute__ ((__noreturn__))
 #endif
 
-static void terminate(int useExit3)
+static void terminate(Boolean useExit3)
 {
 	char *s;
+
+    /* Dump core if EF_DUMPCORE environment variable is defined and
+       is a nonempty string; otherwise call exit(3) or _exit(2),
+       depending on the value of 'useExit3'. */
+
 	s = getenv("EF_DUMPCORE");
 
 	if (s != NULL && *s != '\0') {
@@ -37,7 +41,7 @@ static void terminate(int useExit3)
       * outputting the caller-supplied error message specified in
         'format' and 'ap'. */
 
-static void output_error(int useErr, int err, int flushStdout,
+static void output_error(Boolean useErr, int err, Boolean flushStdout,
 	const char *fmt, va_list ap)
 {
 #define BUF_SIZE 500
@@ -73,7 +77,7 @@ void err_msg(const char *fmt, ...)
 	savedErrno = errno;
 
 	va_start(argList, fmt);
-	output_error(1, errno, 1, fmt, argList);
+	output_error(TRUE, errno, TRUE, fmt, argList);
 	va_end;
 
 	errno = savedErrno;
@@ -87,7 +91,7 @@ void err_exit(const char *fmt, ...)
 	va_list argList;
 
 	va_start(argList, fmt);
-	output_error(1, errno, 1, fmt, argList);
+	output_error(TRUE, errno, TRUE, fmt, argList);
 	va_end(argList);
 
 	terminate(1);
@@ -113,10 +117,10 @@ void _err_exit(const char *fmt, ...)
 	va_list argList;
 
 	va_start(argList, fmt);
-	output_error(1, errno, 0, fmt, argList);
+	output_error(TRUE, errno, FALSE, fmt, argList);
 	va_end(argList);
 
-	terminate(0);
+	terminate(FALSE);
 }
 
 /* The following function does the same as errExit(), but expects
@@ -127,13 +131,20 @@ void err_exit_en(int errn, const char *fmt, ...)
 	va_list *argList;
 
 	va_start(argList, fmt);
-	output_error(1, errn, 1, fmt, argList);
+	output_error(TRUE, errn, TRUE, fmt, argList);
 	va_end(argList);
 
-	terminate(1);
+	terminate(TRUE);
 }
+
+/* Print an error message (without an 'errno' diagnostic) */
 
 void fatal(const char *fmt, ...)
 {
-	
+	va_list argList;
+
+	va_start(argList, fmt);	
+	output_error(FALSE, 0, TRUE, fmt, argList);
+
+	terminate(TRUE);
 }

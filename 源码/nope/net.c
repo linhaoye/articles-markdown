@@ -1,5 +1,5 @@
 #include <fcntl.h>
-#include <unistd.h>
+#include "common.h"
 
 void setfl(int fd, int fl)
 {

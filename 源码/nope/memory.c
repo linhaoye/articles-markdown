@@ -1,8 +1,7 @@
-#include <stdlib.h>
-#include <string.h>
+
 #include <assert.h>
-#include <unistd.h>
 #include <sys/mman.h>
+#include "common.h"
 #include "memory.h"
 
 struct {

@@ -1,7 +1,6 @@
 #include <stdlib.h>
-#include <string.h>
 #include <fcntl.h>
-#include <unistd.h>
+#include "common.h"
 #include "err_func.h"
 #include "pipe.h"
 
