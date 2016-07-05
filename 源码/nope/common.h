@@ -22,7 +22,7 @@
 #undef FALSE
 #endif
 
-typedef enum { FALSE, TRUE} Boolean;
+typedef enum { FALSE, TRUE } Boolean;
 
 #define min(m,n) ((m) < (n) ? (m) : (n))
 #define max(m,n) ((m) > (n) ? (m) : (n))
@@ -30,5 +30,7 @@ typedef enum { FALSE, TRUE} Boolean;
 #if defined(__sgi)
 typedef int socklen_t;
 #endif
+
+void setfl(int fd, int fl);
 
 #endif

@@ -1,19 +1,12 @@
 
 #include <assert.h>
 #include <sys/mman.h>
+#include <fcntl.h>
+#include <sys/mman.h>
 #include "common.h"
 #include "memory.h"
 
-struct {
-	int size;
-	char file[MAP_FILE_SIZE];
-	int fd;
-	int key;
-	int shmid;
-	void *addr;
-} smem_t;
-
-void *share_memory_new(smem_t *smt, int size, char *file)
+void *share_memory_new(smem_t *smt, size_t size, char *file)
 {
 	void *m;
 	int fd = 0;
@@ -24,10 +17,10 @@ void *share_memory_new(smem_t *smt, int size, char *file)
 	}
 
 	if ((fd = open(file, O_RDWR)) == -1) {
-		err_exit("open()")
+		err_exit("open()");
 	}
 
-	if ((m = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_FILE | MAP_SHARED, fd)) == (caddr_t)-1) {
+	if ((m = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_FILE | MAP_SHARED, fd, 0)) == (caddr_t)-1) {
 		err_exit("mmap()");
 	}
 
@@ -41,6 +34,8 @@ void *share_memory_new(smem_t *smt, int size, char *file)
 
 int share_memory_delete(smem_t *smt)
 {
-	assert(smt != NULL);
+	assert(smt->addr != NULL);
+
+	close(smt->fd);
 	return munmap(smt->addr, smt->size);
 }

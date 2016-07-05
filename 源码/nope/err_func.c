@@ -78,7 +78,7 @@ void err_msg(const char *fmt, ...)
 
 	va_start(argList, fmt);
 	output_error(TRUE, errno, TRUE, fmt, argList);
-	va_end;
+	va_end(argList);
 
 	errno = savedErrno;
 }
@@ -94,7 +94,7 @@ void err_exit(const char *fmt, ...)
 	output_error(TRUE, errno, TRUE, fmt, argList);
 	va_end(argList);
 
-	terminate(1);
+	terminate(TRUE);
 }
 
 /* Display error message including 'errno' diagnostic, and
@@ -128,7 +128,7 @@ void _err_exit(const char *fmt, ...)
 
 void err_exit_en(int errn, const char *fmt, ...)
 {
-	va_list *argList;
+	va_list argList;
 
 	va_start(argList, fmt);
 	output_error(TRUE, errn, TRUE, fmt, argList);
@@ -145,6 +145,7 @@ void fatal(const char *fmt, ...)
 
 	va_start(argList, fmt);	
 	output_error(FALSE, 0, TRUE, fmt, argList);
+	va_end(argList);
 
 	terminate(TRUE);
 }

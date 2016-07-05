@@ -1,7 +1,5 @@
-#include <stdlib.h>
 #include <fcntl.h>
 #include "common.h"
-#include "err_func.h"
 #include "pipe.h"
 
 typedef struct _pipe {
@@ -10,8 +8,7 @@ typedef struct _pipe {
 
 void pipe_open(pipe_t *pip, int blocking)
 {
-	int flag = 0;
-	struct _pipe *_pipe = malloc(sizeof (*_pipe));
+	_pipe *_pipe = malloc(sizeof (*_pipe));
 
 	if (_pipe == NULL) {
 		err_exit("malloc()");
@@ -59,4 +56,5 @@ void pipe_close(pipe_t *pip)
 
 	close(p->fd[0]);
 	close(p->fd[1]);
+	free(p);
 }

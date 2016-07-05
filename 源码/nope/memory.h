@@ -6,10 +6,18 @@
 #define MAP_FILE 0
 #endif
 
-struct smem_t;
-typedef struct smem_t smem_t;
+struct _smem_t {
+	int size;
+	char file[MAP_FILE_SIZE];
+	int fd;
+	int key;
+	int shmid;
+	void *addr;
+};
 
-void *share_memory_new(smem_t *smt, int size, char *file);
+typedef struct _smem_t smem_t;
+
+void *share_memory_new(smem_t *smt, size_t size, char *file);
 
 int share_memory_delete(smem_t *smt);
 
