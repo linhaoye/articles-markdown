@@ -1,0 +1,554 @@
+###概念式问题
+
+1.写出几个php中预定义全局变量
+
+```php
+$_ENV
+$_SERVER
+$_REQUEST
+$_COOKIE
+$_POST
+$_GET
+$_FILES
+$GLOBALS
+```
+
+2.写出smarty模板的的特点
+
+```
+-速度快
+-编译型
+-缓存技术
+-插件机制
+-强大的表现逻辑
+```
+
+3.include, reuire, include_once, require_once的区别?
+
+```
+include, include_once 包含的文件不存在的话, 那么会提示一个错误, 但和程序会继续执行下去.
+require, require_once 包含的文件不存在的话, 那么会提示一个致命错误, 程序终止.
+
+inclue_once, require_once 只包含一次, 不会重复包含.
+```
+4.php中split()和explode()的区别？###
+
+```
+split函数原型:
+array split(string $pattern, string $string [, int $limit])
+
+explode函数原型：
+array explode(string $separator, string $string [, int $limit])
+
+expload用字符串分割, split用正则分割, expload要比split快多了.
+
+
+```
+
+5.请说明php中传值与传引用的区别。什么时候传值什么时候传引用?###
+
+```
+传值:
+    变量默认总是传值。传送给函数的是它是值, 当函数改变一个变量的值时,只有这个函数才见到新值, 应用的其他部分仍然见旧值。
+传引用:
+    传送的是变量的地址而非它的值, 所以在函数中改变一个变量的值时, 整个应用都风到这个变量的新值。
+
+另外, 对旬默认传引用。
+```
+
+6.在PHP中error_reporting这个函数有什么作用?
+```
+打开或者关闭错误报告, 如:
+error_reporting(0);
+error_reporting(2047); //意味显示注中所有错误
+error_reporting(E_ALL & ~E_NOTICE);
+error_reporting(E_ALL);
+
+注 2047 = 1 + 2 + 4 + 8 + 16 + 32 + 128 + 256 + 512 + 1024;
+
+1    => E_ERROR
+2    => E_WARNING
+4    => E_PARSE
+8    => E_NOTICE
+16   => E_CORE_ERROR
+32   => E_CORE_WARNING
+64   => E_COMPILE_ERROR
+128  => E_COMPLIE_WARNING
+256  => E_USER_ERROR
+512  => E_USER_WARNING
+1024 => E_USER_NOTICE
+```
+
+7.常量如何定义?如何检一个常量是否被定义?
+
+```
+定义常量: define();
+检测常量是否被定义: defined();
+```
+
+8.字符串怎么转成整数, 有几种方法?
+
+```
+    1. 强制类型转换: (整型)字符串变量名 如: (int)('09h');
+    2. 直接转换: settype(字符串变量, 整形) 如: settype('09h', int);
+    3. intval(字符串变量) 如: intval($str);
+```
+
+9.php5中魔术方法有哪几个, 请举例说明各自的用法
+
+```
+__sleep     serialize之前被调用
+__wakeup    unserialize时被调用
+__toString  打印一个对象时被调用
+__set_state 调用var_export时被调用, 用__set_state的返回值作为var_export的返回值
+__construct 构造函数, 实例化对象时被调用
+__destruct  析构函数, 当对象销毁时被调用
+__call      对象调用某个方法, 若存在该方法, 则直接返回, 若不存在, 则调用__call函数
+__get       读取一个对象属性时, 若属性存在, 则直接返回, 若不存在, 测调用__get函数
+__set       设置一个对象属性时, 若属性存在, 则直接赋值, 若不存在, 则调用__set函数 
+__isset
+__unset
+__clone
+__autoload
+```
+
+10.php中empty,is_null,isset的区别
+
+```
+isset 判断变量是否已存在，如果变量存在则返回 TRUE，否则返回 FALSE。
+
+empty 判断变量是否为空，如果变量是非空 或非零 的值，则 empty() 返回 FALSE。
+      换句话说，"" 、0 、"0" 、NULL 、FALSE 、array() 、var $var; 以及没有任何属性的对象 
+      都将被认为是空的，如果变量为空，则返回 TRUE。
+
+is_null 判断变量是否为NULL
+
+EXPRESSION      GETTYPE()   EMPTY() IS_NULL()   ISSET() BOOLEAN : IF($X)
+$x = "";	    string      TRUE    FALSE       TRUE	FALSE
+$x = null       NULL        TRUE    TRUE        FALSE   FALSE
+var $x;         NULL        TRUE    TRUE        FALSE   FALSE
+$x is undefined NULL        TRUE    TRUE        FALSE   FALSE
+$x = array();   array       TRUE    FALSE       TRUE    FALSE
+$x = false;     boolean     TRUE    FALSE       TRUE    FALSE
+$x = true;      boolean     FALSE   FALSE       TRUE    TRUE
+$x = 1;         integer     FALSE   FALSE       TRUE    TRUE
+$x = 42;        integer     FALSE   FALSE       TRUE    TRUE
+$x = 0;         integer     TRUE    FALSE       TRUE    FALSE
+$x = -1;        integer     FALSE   FALSE       TRUE    TRUE
+$x = "1";       string      FALSE   FALSE       TRUE    TRUE
+$x = "0";       string      TRUE    FALSE       TRUE	FALSE
+$x = "-1";      string      FALSE   FALSE       TRUE	TRUE
+$x = "php";     string      FALSE   FALSE       TRUE	TRUE
+$x = "true";	string      FALSE   FALSE       TRUE	TRUE
+$x = "false";   string      FALSE   FALSE       TRUE	TRUE
+
+```
+
+11.接口和抽象类的区别是什么?
+
+```
+抽象类是一种不能被例化的类, 只能作为其他为的父类为使用。抽象类是通过关键字abstract来声明的。
+抽象类与普通类相似, 都包含成员变量和成员方法, 两者的区别在于, 抽象类至少要包含一个抽象方法。
+抽象类方法没有方法体, 该方法是要被子类重写的。
+抽象方法的格式为: abstract function demo1();
+
+接口是通过interface关键字来声明的, 接口中的成员常量和方法都是public的, 方法可以不写关键定public。
+接口中的方法也是没有方法体的。接口中的方法也是要被子类为实现的。
+接口能实现多继承。
+```
+
+11.cooike和session的区别联系, 禁用cookie后session还能用吗?为什么?
+
+```
+
+1.session存放在服务端, 而cookie是存放在客户端的
+2.session生成时, sessionId会发送给客户端, 通过cookie保存;存取方式靠此id维持
+3.cookie禁用后, 理论上session会失效;但可通过URL重写的方式来传递sessionId的值
+
+```
+
+12.多台服务器怎样实现session共享, 阐述实现方法
+
+13.阐述闭包和名命空间的概念和作用
+
+14.解释xss攻击, ssrf攻击的原理, 如何预防?
+
+15.php中的GC收集机制
+
+16.常用的设计模式有哪些?
+
+17.高并发大数据网站请求, 怎样优化?
+
+18.谈谈apache和nginx的优缺点, 什么情况下使用更合适?
+
+19.数据库分库分表的实现方法, 什么情况下使用更合适?
+
+20.redis和memcache有什么区别?
+
+21.mysql和mongodb的区别, 各自在什么场景使用?
+
+22.php-fpm和fast-cgi的关系, nginx怎样配置php-fpm?
+
+23.面向对象中, self与this的区别是?
+
+24.写出linx中, 查找后缀名为.txt的, 且内容包含delete的文件, 找并删除的命令
+
+```
+find / -type f -name "*.txt" | xargs grep "delete" --delete
+```
+
+###PHP技巧
+
+1.写出一个能创建多级目录的PHP函数
+```php
+function createDir($path, $mode = 0777)
+{
+	if (is_dir($path)) {
+		return false;
+	}
+
+	if (!mkdir($path,$mode, true)) {
+		return false;
+	}
+
+	return true;
+}
+```
+
+2.中文字符串截取无乱码的方法
+
+```php
+//1.使用php内置函数mb_strlen()
+$str1 = "php";
+echo strlen($str); //3
+
+$str2 = "我风骚的作者";
+echo strlen($str2); //18
+echo mb_strlen($str2, 'utf8'); //6
+
+//2.自定义函数
+function substrUtf8($str, $start, $length = null)
+{
+    return join("", array_slice(
+            preg_split('//u', $str, -1, PREG_SPLIT_NO_EMPTY, $start, $length),    
+        ))
+}
+
+```
+
+3.打开php.ini中的safe_mode, 会影响哪些函数?
+
+```
+safe_mode, php安全模式(php5.3以上版本,已弃用).
+以下函数会受到影响:
+chdir, move_uploaded_file, chgrp, parse_ini_file, chown
+rmdir, copy, rename, fopen,require, mkdir, unlink
+...
+
+```
+
+4.抓取远程图片到本地
+
+```php
+
+#可以用curl也可以用一些socket函数
+
+function getRmtRes($url)
+{
+	return file_get_content($url);
+}
+
+#或者curl
+function getRmtRes($url)
+{
+
+}
+```
+5.多个进程同时写入同一个文件成功
+
+```php
+#文件锁
+
+function wirteFile($filename, $mode, $buff)
+{
+	$fp = fopen($filename, $mode);
+
+	if (!$fp) return false;
+
+	if (flock($fp, LOCK_EX)) {
+		//获得写锁, 写数据
+		fwrite($fp, $buff);
+		//解锁
+		flock($fp, LOCK_UN);
+
+		fclose($fp);
+		return true;
+	}
+
+	return  false;
+}
+
+$buff="hee!";
+wirteFile("lock.txt", "w+", $buff);
+
+```
+
+6.获取url的扩展名
+
+```php
+# 输入: http://www.sina.com.cn/abc/de/fg.php?id=1
+
+#方案1
+function getExt($url)
+{
+	$seg  = parse_url($url);
+	$file = basename($seg['path']);
+	$ext  = expolde('.', $file);
+
+	return $ext[count($ext) -1];
+}
+
+#方案2
+function getExt($url)
+{
+	$file = basename($url);
+	$pos1 = strpos($url, '.');
+	$pos2 = strpos($url, '?');
+
+	return strstr($url, '?') ? substr($url, $pos + 1, $pos2 - $pos1 -1):
+		substr($url, $pos1);
+}
+```
+
+7.写一个函数, 遍历一个文件夹下的所有文件和子文件夹
+```php
+#递归实现, 使用目录操作函数
+function scanDir($dir)
+{
+	$files = array();
+	if (is_dir($dir)) {
+		if ($handle = opendir($dir)) {
+			while ( ($file = readdir($handle)) !== false) {
+				if ($file != "." && $file != "..") {
+					if (is_dir($dir . '/' . $file))	{
+						$files[$file] = scandDir($dir . '/' . $file);
+					} else {
+						$files[] = $dir . '/' . $file;
+					}
+				}
+			}
+		}
+		closedir($handle);
+		return $files;
+	}
+}
+
+#使用类
+function scanDir($dir)
+{
+
+}
+```
+8.简述论坛中无限级分类的实现原理
+
+```sql
+#数据表设计如下
+CREATE TABLE `category` (
+	`id` int unsigned not null auto_increment primary key,
+	`cat_name` varchar(30) not null,
+	`pid` int unsigned not null
+) ENGINE=InnoDB charset=utf8
+```
+
+```php
+#这是坑爹的题目
+#编历
+function parserTree(array $arr, $pid = 0, $level = 0)
+{
+	static $list = array();
+
+	foreach ($arr as $v) {
+
+		//如果是顶级分类, 则将其存到$list中,
+		//并以此节点作为根节点, 遍历找其子节点
+
+		if ($v['pid'] == $pid) {
+			$v['level'] = $level;
+			$list[] = $v;
+			parserTree($arr, $v['id'], $level + 1);
+		}
+	}
+
+	return $list;
+}
+
+```
+
+9.计算相对路径(这个也是一个坑爹的题目)
+
+```php
+# 期望: $a = '/a/b/c/d/e.php'; $b='/a/b/12/34/c.php';);
+# 结果: $b相对$a的相对路径: ../../c/d
+
+function relativePath($path1, $path2)
+{
+	$arr1 = explode('/', dirname($path1));
+	$arr2 = explode('/', dirname($path2));
+
+	for ($i = 0, $len = count($arr2); $i < len; $i++) {
+		if ($arr1[$i] != $arr2[$i]) {
+			break;
+		}
+	}
+
+	//不在同一个根目录
+	if ($i == 1) {
+		$returnPath = array();
+	}
+
+	//在同一个根目录
+	if ($i != 1 && $i < $len) {
+		$returnPath = array_fill(0, $len - $i, "..");
+	}
+
+	//在同一个目录下
+	if ($i == $len) {
+		$returnPath = array('./');
+	}
+
+	$returnPath = array_merge($returnPath, array_slice($arr1, $i));
+
+	return implode('/', $returnPath);
+}
+
+# 测试
+$a = '/a/b/c/e.php';
+$b = '/a/b/12/34/c.php';
+$c = '/e/b/c/d/f.php';
+$d = '/a/b/c/d/g.php';
+
+echo relativePath($a, $b);
+echo relativePath($a, $c);
+echo relativePath($a, $d);
+
+```
+10.php实现跳转
+
+```php
+##方案1
+$url = 'http://www.baidu.com';
+header("Location: " . $url); //立即跳转
+header("refresh:3;url=" . $url); //3秒后跳转
+
+##方案2, 利用meta
+echo "<meta http-equiv=refresh content'0;url=http://abc.com'>";
+```
+
+11.过虑网页上的所有js/vbs脚本
+
+```php
+function filterScripte($text, replace)
+{
+	$patten = "#<script[^>]*?>.*?</script>#si";
+
+	return preg_replace($patten, $replace, $text);
+}
+```
+12.过虑HTML标答
+
+```php
+# 自定义
+function stripHtmlTags($str)
+{
+	$patten = "#<(\"[^\"]*\"|'[^']\*'|[^>\"'])*>#"
+
+	return preg_replace($patten, '', $str);
+}
+
+# 使用内建
+function stripHtmlTags($str)
+{
+	return strip_tags($str);
+}
+```
+
+13.验证Email
+
+```php
+function validateEmail($email)
+{
+	$patten = '#/^[\w\-\.]+@[\w\-]+(\.\w+)+$#';
+
+	return preg_match($patten, $email);
+}
+```
+
+14.php中判断一个合法的日期
+
+```php
+# 输入: 2016-03-13 13:13:13
+
+function checkDateTime($date)
+{
+	if (date("Y-m-d H:i:s", strtotime($date)) == $date) {
+		return true;	
+	}
+	return false;
+}
+```
+
+15.获取上个月的最后一天
+
+```php
+function getLastDate()
+{
+	return date('Y-m-d', strtotime(date('Y-m-01')) - 24 * 6 * 6)
+}
+
+##还有其方法
+```
+
+16.编码转换
+
+```php
+# 期望: gb2312=>utf-8
+
+function transform($text)
+{
+	return iconv("GB2312", "UTF-8", $text);
+}
+
+
+```
+
+17.php实现读取一个10G的文件, 查找一个字符串, 返回行号(机器可用内存200M)
+
+###数据结构与算法
+
+1.写一个快排算法
+
+
+###SQL
+
+1.有如下数据表, 请统计上月比上上月多10%点击数的策划人姓名和广告名
+```sql
+#广告表
++----+-------+------+----------+
+| id | title | man  | time     |
++----+-------+------+----------+
+|  1 | test  | kity | 12341234 |
++----+-------+------+----------+
+
+#统计表
++----+------+------------+-------+
+| id | adid | day        | click |
++----+------+------------+-------+
+|  1 |    1 | 2016-09-09 |    34 |
++----+------+------------+-------+
+```
+
+2.10万行数据情况下, 如优化like '%经济%'?
+
+3.简述一下优化mysql使用的方法以及使用的工具和命令
+
+4.
