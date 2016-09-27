@@ -53,7 +53,7 @@ expload用字符串分割, split用正则分割, expload要比split快多了.
 传引用:
     传送的是变量的地址而非它的值, 所以在函数中改变一个变量的值时, 整个应用都风到这个变量的新值。
 
-另外, 对旬默认传引用。
+另外, 对象默认传引用, 在php中数组默认是普通变量。
 ```
 
 6.在PHP中error_reporting这个函数有什么作用?
@@ -64,7 +64,7 @@ error_reporting(2047); //意味显示注中所有错误
 error_reporting(E_ALL & ~E_NOTICE);
 error_reporting(E_ALL);
 
-注 2047 = 1 + 2 + 4 + 8 + 16 + 32 + 128 + 256 + 512 + 1024;
+注: 2047 = 1 + 2 + 4 + 8 + 16 + 32 + 128 + 256 + 512 + 1024;
 
 1    => E_ERROR
 2    => E_WARNING
@@ -144,14 +144,14 @@ $x = "false";   string      FALSE   FALSE       TRUE	TRUE
 
 
 说明:
-	这里考的php空的语义
+	这里考的php空, null以及存在的语义
 
 ```
 
 11.接口和抽象类的区别是什么?
 
 ```
-抽象类是一种不能被例化的类, 只能作为其他为的父类为使用。抽象类是通过关键字abstract来声明的。
+抽象类是一种不能被实例化的类, 只能作为其他类的父类为使用。抽象类是通过关键字abstract来声明的。
 抽象类与普通类相似, 都包含成员变量和成员方法, 两者的区别在于, 抽象类至少要包含一个抽象方法。
 抽象类方法没有方法体, 该方法是要被子类重写的。
 抽象方法的格式为: abstract function demo1();
@@ -165,9 +165,9 @@ $x = "false";   string      FALSE   FALSE       TRUE	TRUE
 
 ```
 
-1.session存放在服务端, 而cookie是存放在客户端的
-2.session生成时, sessionId会发送给客户端, 通过cookie保存;存取方式靠此id维持
-3.cookie禁用后, 理论上session会失效;但可通过URL重写的方式来传递sessionId的值
+1.session存放在服务端, 而cookie是存放在客户端;
+2.session生成时, sessionId会发送给客户端, 通过cookie保存;存取方式靠此id维持;
+3.cookie禁用后, sessionId丢失, 理论上session会失效;但可通过URL重写的方式来传递sessionId的值.
 
 ```
 
@@ -175,7 +175,7 @@ $x = "false";   string      FALSE   FALSE       TRUE	TRUE
 
 13.阐述闭包和名命空间的概念和作用
 
-14.解释xss攻击, ssrf攻击的原理, 如何预防?
+14.解释xss攻击, csrf攻击的原理, 如何预防?
 
 15.php中的GC收集机制
 
@@ -208,7 +208,7 @@ echo $abc;   //output: something
 
 23.面向对象中, self与this的区别是?
 
-24.写出linx中, 查找后缀名为.txt的, 且内容包含delete的文件, 找并删除的命令
+24.写出linux中, 查找后缀名为.txt的, 且内容包含delete的文件, 找出并删除的命令
 
 ```shell
 find / -type f -name "*.txt" | xargs grep "delete" --delete
@@ -237,14 +237,14 @@ if ($str == 0) {
 是0, 所以`$str = 0`比较结果就为真.
 
 犯这一类型错误的人一般是从java,c等语言转到php开发的程序员, 因为java,c等语言是
-强类型, 不是允许不同类型的变量和常量相互比较的, 在这种情况下会报语法错误或者是
+强类型, 不允许不同类型的变量和常量相互比较的, 在这种情况下会报语法错误或者是
 警告.
 
 所以, php会引出一个严格比较运算符`===`, 要求比较的双方必须类型一致, 把上面语句
 `if ($str == 0)`改为`if ($str === 0)`就可以了.
 ```
 
-26. `echo count('abc');`,`echo count(false);`,`echo count(null)`;分别输出什么?
+26.echo count('abc'), echo count(false), echo count(null)分别输出什么?
 
 ```
 echo count('abc'); //1
@@ -253,7 +253,7 @@ echo count(null); //0
 
 count的语义在php手册查出是: `Counts all elements in an array, or something in an object`
 
-如果参数不是一个实现了`countable`接口的数组或者是对象, 返回值是1.有一个例是, 如果是NULL,
+如果参数不是一个实现了`countable`接口的数组或者是对象, 返回值是1.有一个特例是, 如果是NULL,
 返回值是0.
 
 ```
@@ -268,7 +268,7 @@ php脚本执行效率分析:
 
 sql查询效率分析:
 	1.sql的explain(sql), 启用slow query log记录慢查询
-	2.通常还要看数据库设计是否全理, 需求是否合理
+	2.通常还要看数据库设计是否合理, 需求是否合理
 
 ```
 
@@ -303,10 +303,13 @@ echo $var2, "\n";
 ```
 
 ```
-分析1: 这里考察的应该是变理的作用域, static关键字以及还++运算符概念
+分析1: 这里考察的应该是变量的作用域, static关键字以及还有++运算符概念
 
 第一个echo的结果是5;之后自增$count=6;
-第二个echo的结果是0, 它调用了getCount(), 函数里面的count是静态分配的, 它屏蔽了外面的全局变量$count, 由于是后置++, 调用后$count再自增;
+
+第二个echo的结果是0, 它调用了getCount(), 函数里面的count是静态分配的, 它屏蔽了外面的全局变量$count, 由于是后置++, 
+	调用后, 先return然后$count再自增;
+
 第三个echo的结果是1, 分析也同上.
 
 输出2: 5 2
@@ -334,6 +337,7 @@ echo count($arr2), "\n";
 
 在php4中, 上面会输出1, 2
 这里注意的一点是, php数组传递的过程中, 是会拷贝一份副本的, 不会改变原有模式的.
+(也就是按普通变量来处理)
 
 ```
 
@@ -487,13 +491,42 @@ function mscanDir($dir)
 
 function mscanDir($dir)
 {
+	$files = array();
 
+	if (is_dir($dir)) {
+		foreach (scandir($dir) as $file) {
+			if ($file != '.' && $file != '..') {
+				if (is_dir($dir . '/' . $file)) {
+					$files[$file] = mscanDir1($dir . '/' . $file);
+				} else {
+					$files[] = $dir . '/' . $file;
+				}
+			}
+		}
+		return $files;
+	}
 }
 
 #使用迭代类
 function mscanDir($dir)
 {
+	$iterator = new DirectoryIterator($dir);
 
+	foreach ($iterator as $it) {
+		if ($it->isFile()) {
+			$files[] = $it->__toString();
+		} else if (! $it->isDot()) {
+			$list = array($it->__toString() => mscanDir2($dir . DIRECTORY_SEPARATOR .$it->__toString()));
+
+			if (!empty($files)) {
+				$files = array_merge_recursive($files, $list);
+			} else {
+				$files = $list;
+			}
+		}
+	}
+
+	return $files;
 }
 ```
 8.简述论坛中无限级分类的实现原理
@@ -543,7 +576,7 @@ function relativePath($path1, $path2)
 	$arr2 = explode('/', dirname($path2));
 
 	for ($i = 0, $len = count($arr2); $i < $len; $i++) {
-		if (!isset($arr1[$i], $arr2[$i]) || 
+		if (!isset($arr1[$i], $arr2[$i]) ||  //这里因为$arr1,$arr2长度不一
 			$arr1[$i] != $arr2[$i]) {
 			break;
 		}
