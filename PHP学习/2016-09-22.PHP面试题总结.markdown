@@ -576,7 +576,7 @@ function relativePath($path1, $path2)
 	$arr2 = explode('/', dirname($path2));
 
 	for ($i = 0, $len = count($arr2); $i < $len; $i++) {
-		if (!isset($arr1[$i], $arr2[$i]) ||  //这里因为$arr1,$arr2长度不一
+		if (!isset($arr1[$i], $arr2[$i]) ||  //这里因为$arr1,$arr2长度不一, 会引发后面offset错误
 			$arr1[$i] != $arr2[$i]) {
 			break;
 		}
@@ -744,11 +744,137 @@ getenv('REMOTE_ADDR');
 $_SERVER('REMOTE_ADDR');
 ```
 
+20.按下面要求写一段程序
+```
+输入参数–一个字符串，返回一个字符串。
+输入是一句英文句子，只有英文字(a-z, A-Z)、每个字之间仅以一个空格分格，前后没有空格。
+返回的是要把每一个字的字母顺序倒转写，但字的顺序和字母的大小写位置则保持不変
+
+示例:
+输入参数This is an Apple on eBay
+
+返回
+Siht si na Elppa no yAbe
+(如eBay因为是第二个字母大写，倒写后保持第二个字母的大写。)
+
+```
+
+```php
+
+#说明: 这道用什么php字符串函数不太管用, 最有效率的做法是扫描字符串
+
+function recursestr($str)
+{
+	$arr = explode(' ', $str);
+
+	return implode(' ', array_map(function($val) {
+		$rev = strtolower(strrev($val));
+
+		for ($i = 0; $i < strlen($val); $i++) {
+			if (ord($val[$i]) <= ord('Z') && ord('A') <= ord($val[$i])) {
+				$rev[$i] = strtoupper($rev[$i]);
+			}
+		}
+
+		return $rev;
+	}, $arr));
+}
+
+
+echo recursestr("This is An Apple on eBay's RoOm"), "\n";
+
+```
+
 ###数据结构与算法
 
 1.写一个快排算法
 
+```php
+function qsort(array $arr)
+{
+	if (count($arr) <= 1) {
+		return $arr;
+	}
+
+	$key   = $arr[0];
+	$left  = array();
+	$right = array();
+
+	for ($i = 1; $i < count($arr); $i++) {
+		if ($arr[$i] <= $key) {
+			$left[] = $arr[$i];
+		} else {
+			$right[] = $arr[$i];
+		}
+	}
+
+	$left  = qsort($left);
+	$right = qsort($right);
+
+	return array_merge($left, array($key), $right);
+}
+
+# 测试
+$array = array(9, 7, 87, 2, 34, 6, 23, 828, 74, 23, 8, 72, 848);
+$t = qsort($array);
+
+```
+
 2,写一个冒泡排序
+
+```php
+function bsort(array $arr)
+{
+	$cnt = count($arr);
+	if ($cnt <= 0) {
+		return false;
+	}
+
+	for ($i = 0; $i < $cnt; $i++) {
+		for ($j = $i; $j < $cnt -1; $j++) {
+			if ($arr[$i] > $arr[$j]) {
+				$tmp = $arr[$i];
+				$arr[$i] = $arr[$j];
+				$arr[$j] = $tmp;
+			}
+		}
+	}
+
+	return $arr;
+}
+
+3.二分查找
+
+```php
+
+function binsch(array $arr, $low, $hight, $k)
+{
+	if ($low <= $hight) {
+		$mid = intval(($low + $hight) / 2);
+	}
+
+	if ($arr[$mid] == $k) {
+		return $mid;
+	} else if ($k < $arr[$mid]) {
+		return binsch($arr, $low, $mid - 1, $k);
+	} else {
+		return binsch($arr, $mid + 1, $hight, $k);
+	}
+
+	return -1;
+}
+
+$array = array(9, 7, 87, 2, 34, 6, 23, 828, 74, 23, 8, 72, 848);
+sort($array);
+$found = binsch($array, 0, count($array) -1, 74);
+
+```
+
+# 测试
+$array = array(9, 7, 87, 2, 34, 6, 23, 828, 74, 23, 8, 72, 848);
+$t = bsort($array);
+
+```
 
 ###SQL
 
