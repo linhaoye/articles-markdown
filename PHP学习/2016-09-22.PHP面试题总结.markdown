@@ -177,6 +177,28 @@ $x = "false";   string      FALSE   FALSE       TRUE	TRUE
 
 14.解释xss攻击, csrf攻击的原理, 如何预防?
 
+```
+xss: 跨站脚本攻击(Cross Site Scripting), xss是攻击者在web页面插入恶意的代码. 当用户浏览该页的时候,
+代码主动或者被动执行, 从而实现攻击目的.
+
+csrf: 跨站请求伪造(Cross-site request forgery), 也被称作为: one click attack/session riding. 危害是
+攻击者可以盗用你的身份, 以你的名义发送恶意请求.
+
+xss防御:
+	原则是不相信客户输入的数据. 注意攻击代码不一定在<script></script>中, 它可能出现在标签中.
+	(1): 使用xss filter (即输入过滤)
+	(2): DOM型的xss攻击防御
+	(3): HttpOnly Cookie 
+		将重要的cookie标记为http only, 这样的话当浏览器向Web服务器发起请求的时就会带上cookie字段,
+		但是在脚本中却不能访问这个cookie, 这样就避免了XSS攻击利用JavaScript的document.cookie获取cookie
+
+csrf防御:
+	(1): 正确使用GET, POST和Cookie, 对于关键的操作我们应该采用post方法
+	(2): 使用验证码或者Token, 验证码的使用往往用户体验不太好, 目前主流的做法是使用Token
+	(3): 检测Referer, 在http请求报头中, Referer标识了请求的来源, 不过Referer是可以伪造的
+
+```
+
 15.php中的GC收集机制
 
 ```
@@ -194,9 +216,33 @@ echo $abc;   //output: something
 
 16.常用的设计模式有哪些?
 
+```
+工厂模式
+单例模式
+观察者模式
+命令模式
+策略模式
+```
+
 17.高并发大数据网站请求, 怎样优化?
 
+```
+不外乎两方面, 硬件和软件的优化, 具体如下：
+
+(1): 确认服务器硬件能否支持当前的并发量以及流量
+(2): 代码优化
+(3): 性能瓶颈主要出现在数据库层, 优化数据库的访问
+(4): 分流以及集群
+(5): 缓存(减少对数据库的访问)
+(6): 流量的控制(如防盗链, 大文件下载)
+```
+
 18.谈谈apache和nginx的优缺点, 什么情况下使用更合适?
+
+```
+ng: 轻量级, 内在占用少, 抗并发, 异步非阻塞 (适用: 反向代理)
+ap: 稳定, rewrite强大, 动态请求处理强 (适用: 动态处理较多的场景)
+```
 
 19.数据库分库分表的实现方法, 什么情况下使用更合适?
 
@@ -204,9 +250,22 @@ echo $abc;   //output: something
 
 21.mysql和mongodb的区别, 各自在什么场景使用?
 
+```
+最大的区别就是
+mysql: 关系型数据库
+mongodb: 非关系型
+
+mysql适用于数据模型稳定, 数据逻辑关系强的场景
+mongodb适用于单一, 频繁快速变更数据模型, 插入和查找速度快的场景
+```
+
 22.php-fpm和fast-cgi的关系, nginx怎样配置php-fpm?
 
 23.面向对象中, self与this的区别是?
+
+```
+this是指向当前对象的指针(可以看成C里面的指针), self是指向当前类的指针, parent是指向父类的指针.
+```
 
 24.写出linux中, 查找后缀名为.txt的, 且内容包含delete的文件, 找出并删除的命令
 
