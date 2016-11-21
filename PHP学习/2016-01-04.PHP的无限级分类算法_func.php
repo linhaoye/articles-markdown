@@ -37,6 +37,30 @@ function array_to_tree(array $array,
 	return $format_tree;
 }
 
+/**
+ * 	不使用static类型的数据
+ */
+function array_to_tree3(array $array,
+						$root   = 0,
+						$level  = 0,
+						$id     = 'id',
+						$pid    = 'pid',
+						$title  = "title",
+						$anchor = "|-"
+					)
+{
+	$format_tree = array();
+	foreach ($array as $value) {
+		if ($value[$pid] == $root) {
+			$value['level'] = $level;
+			$value[$title]  = str_repeat('  ', $level * 2) . $anchor;
+			$format_tree[]  = $value;
+			$format_tree    = array_merge($format_tree, array_to_tree($array, $value[$id], $level + 1));
+		}
+	}
+	return $format_tree;
+}
+
 function array_to_tree2(array $array,
 						$id  = 'id',
 						$pid = 'pid',
