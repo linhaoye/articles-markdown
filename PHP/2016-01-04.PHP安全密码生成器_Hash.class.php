@@ -3,7 +3,6 @@
  * 使用 hash_pbkdf2() php要大于5.5
  */
 
-<?php
 /*
  * Password Hashing With PBKDF2
  * STRAYA!
