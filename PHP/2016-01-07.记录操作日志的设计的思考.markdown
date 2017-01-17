@@ -93,7 +93,7 @@ function log_action($admin_id, $action, $text)
 
 使用时:
 ```php
-namespace Ctroller;
+namespace Controller;
 Procduct extends Controller
 {
 	public del($id = '')
@@ -115,7 +115,7 @@ Procduct extends Controller
 我们使用时就可以这样:
 
 ```php
-namespace Ctroller;
+namespace Controller;
 Procduct extends Controller
 {
 	public del($id = '')
