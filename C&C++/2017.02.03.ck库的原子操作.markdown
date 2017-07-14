@@ -1,0 +1,32 @@
+该代码位于`ck-0.5.2/include/gcc/x86/ck_pr.h`．
+
+```c
+/*
+ * Atomic fetch-and-add operations.
+ */
+#define CK_PR_FAA(S, M, T, C, I)					\
+	CK_CC_INLINE static T						\
+	ck_pr_faa_##S(M *target, T d)					\
+	{								\
+		__asm__ __volatile__(CK_PR_LOCK_PREFIX I " %1, %0"	\
+					: "+m" (*(C *)target),		\
+					  "+q" (d)			\
+					:				\
+					: "memory", "cc");		\
+		return (d);						\
+	}
+
+CK_PR_FAA(ptr, void, uintptr_t, char, "xaddl")
+
+#define CK_PR_FAA_S(S, T, I) CK_PR_FAA(S, T, T, T, I)
+
+CK_PR_FAA_S(char, char, "xaddb")
+CK_PR_FAA_S(uint, unsigned int, "xaddl")
+CK_PR_FAA_S(int, int, "xaddl")
+CK_PR_FAA_S(32, uint32_t, "xaddl")
+CK_PR_FAA_S(16, uint16_t, "xaddw")
+CK_PR_FAA_S(8,  uint8_t,  "xaddb")
+
+#undef CK_PR_FAA_S
+#undef CK_PR_FAA
+```
